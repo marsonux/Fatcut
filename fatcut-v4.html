@@ -593,6 +593,36 @@
       </div>
     </div>
 
+    <div class="section-label">프록시 설정 (모바일 필수)</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div style="flex:1">
+          <div class="row-label">Cloudflare Worker URL</div>
+          <div class="row-sub">모바일에서 API 연결 시 필요해요</div>
+        </div>
+      </div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+        <input class="s-input" id="proxy-url-input" type="url"
+          placeholder="https://fatcut-proxy.your-id.workers.dev"
+          style="width:100%;text-align:left;font-size:13px;font-weight:500">
+      </div>
+      <div style="padding:12px 16px 14px">
+        <div style="font-size:11px;color:var(--gray2);line-height:1.6;margin-bottom:10px">
+          아래 코드를 Cloudflare Workers에 배포 후 URL을 입력하세요.<br>
+          <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--green)">workers.cloudflare.com</a> → 무료로 시작
+        </div>
+        <div style="background:#0d0d0d;border-radius:10px;padding:12px;font-family:monospace;font-size:11px;color:#8f919c;line-height:1.7;word-break:break-all">
+          export default {<br>
+          &nbsp;&nbsp;async fetch(req) {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;const url = req.url.replace(new URL(req.url).origin, 'https://api.anthropic.com');<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;const res = await fetch(url, { method: req.method, headers: req.headers, body: req.body });<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers), 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' } });<br>
+          &nbsp;&nbsp;}<br>
+          }
+        </div>
+      </div>
+    </div>
+
     <div class="section-label">내 정보</div>
     <div class="settings-card">
       <div class="settings-row">
@@ -657,6 +687,7 @@ const S = {
   pace: 0.5,
   history: [],
   apiKey: '',
+  proxyUrl: '', // Cloudflare Worker URL (모바일 CORS 우회)
 };
 
 const EFFECTS = [
@@ -906,14 +937,17 @@ weight(체중 kg), muscle(골격근량 kg), fatPct(체지방률 %), fatKg(체지
 반드시 JSON만 응답하세요. 예: {"weight":78.1,"muscle":32.2,"fatPct":27.3,"fatKg":21.4,"visceralFat":7,"bmr":1680}
 찾을 수 없는 값은 null로 표시하세요.${extra ? '\n추가 정보: ' + extra : ''}`;
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const proxy = S.proxyUrl || localStorage.getItem('fatcut_proxy') || '';
+    const endpoint = proxy
+      ? proxy.replace(/\/$/, '') + '/v1/messages'
+      : 'https://api.anthropic.com/v1/messages';
+    const headers = proxy
+      ? { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+      : { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+
+    const res = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers,
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 300,
@@ -1025,6 +1059,8 @@ function openSettings() {
   const k = localStorage.getItem('fatcut_key') || '';
   document.getElementById('api-key-input').value = k;
   if (k) setBadge('ok','연결됨');
+  const p = localStorage.getItem('fatcut_proxy') || '';
+  document.getElementById('proxy-url-input').value = p;
   document.getElementById('settings-panel').classList.add('open');
 }
 function closeSettings() { document.getElementById('settings-panel').classList.remove('open'); }
@@ -1032,6 +1068,8 @@ function closeSettings() { document.getElementById('settings-panel').classList.r
 function saveSettings() {
   const k = document.getElementById('api-key-input').value.trim();
   if (k) { S.apiKey = k; localStorage.setItem('fatcut_key', k); }
+  const p = document.getElementById('proxy-url-input').value.trim();
+  S.proxyUrl = p; if (p) localStorage.setItem('fatcut_proxy', p); else localStorage.removeItem('fatcut_proxy');
   S.startFatPct = parseFloat(document.getElementById('cfg-start-fat').value) || 30;
   S.goalFatPct  = parseFloat(document.getElementById('cfg-goal-fat').value) || 18;
   S.mounjaro    = parseFloat(document.getElementById('cfg-mounjaro').value) || 340000;
@@ -1051,14 +1089,14 @@ async function testApi() {
   if (!k) { setBadge('err','Key 없음'); return; }
   setBadge('pending','확인중...');
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const proxy = S.proxyUrl || localStorage.getItem('fatcut_proxy') || '';
+    const ep = proxy ? proxy.replace(/\/$/, '') + '/v1/messages' : 'https://api.anthropic.com/v1/messages';
+    const hdrs = proxy
+      ? { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01' }
+      : { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+    const r = await fetch(ep, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': k,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers: hdrs,
       body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:10, messages:[{role:'user',content:'hi'}] })
     });
     if (r.ok) { S.apiKey = k; localStorage.setItem('fatcut_key', k); setBadge('ok','연결됨'); }
@@ -1083,6 +1121,7 @@ function toBase64(file) {
 // ═══════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   S.apiKey = localStorage.getItem('fatcut_key') || '';
+  S.proxyUrl = localStorage.getItem('fatcut_proxy') || '';
   render();
 });
 </script>
