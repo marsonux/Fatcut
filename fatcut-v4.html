@@ -210,6 +210,62 @@
   .h-val { font-size: 20px; font-weight: 800; color: var(--white); letter-spacing: -0.03em; }
   .h-unit { font-size: 10px; color: var(--gray2); margin-left: 1px; }
 
+
+  /* ── AI 리포트 카드 ── */
+  .report-card {
+    background: var(--card2);
+    border-radius: 20px;
+    margin: 0 16px 10px;
+    padding: 18px 20px;
+    border: 1px solid rgba(0,251,92,0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .report-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--green), transparent);
+  }
+  .report-card.warning {
+    border-color: rgba(255,59,73,0.15);
+  }
+  .report-card.warning::before {
+    background: linear-gradient(90deg, var(--red), transparent);
+  }
+  .report-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 12px;
+  }
+  .report-tag {
+    font-size: 10px; font-weight: 800;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 20px;
+    background: rgba(0,251,92,0.12); color: var(--green);
+  }
+  .report-tag.warn { background: rgba(255,59,73,0.12); color: var(--red); }
+  .report-date { font-size: 11px; color: var(--gray2); margin-left: auto; }
+  .report-body {
+    font-size: 14px; color: var(--white);
+    line-height: 1.75; letter-spacing: -0.01em;
+  }
+  .report-body .highlight { color: var(--green); font-weight: 700; }
+  .report-body .warn-text { color: var(--red); font-weight: 700; }
+  .report-loading {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--gray2);
+    padding: 4px 0;
+  }
+  .report-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(0,251,92,0.2);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
   /* ── 빈 상태 ── */
   .empty-state {
     flex: 1;
@@ -687,7 +743,8 @@ const S = {
   pace: 0.5,
   history: [],
   apiKey: '',
-  proxyUrl: '', // Cloudflare Worker URL (모바일 CORS 우회)
+  proxyUrl: '',
+  reports: [], // {date, text, type: 'good'|'warning'|'baseline'} // Cloudflare Worker URL (모바일 CORS 우회)
 };
 
 const EFFECTS = [
@@ -748,7 +805,35 @@ function renderHome() {
   const wksLeft    = remainKg / S.pace;
   const future     = Math.round(wksLeft * (S.mounjaro / 4.33));
 
-  let html = `
+  // 리포트 섹션 (최신 1개)
+  let reportHtml = '';
+  if (S.reports.length > 0) {
+    const r = S.reports[0];
+    const tagClass = r.type === 'warning' ? 'warn' : '';
+    const tagText = r.type === 'warning' ? '⚠️ 주의' : r.type === 'baseline' ? '📊 베이스라인' : '✅ 분석';
+    const cardClass = r.type === 'warning' ? 'warning' : '';
+    reportHtml = `
+      <div class="report-card ${cardClass}">
+        <div class="report-header">
+          <span class="report-tag ${tagClass}">${tagText}</span>
+          <span class="report-date">${r.date}</span>
+        </div>
+        <div class="report-body">${r.text}</div>
+      </div>`;
+  } else if (S.history.length > 0) {
+    reportHtml = `
+      <div class="report-card">
+        <div class="report-header">
+          <span class="report-tag">AI 분석</span>
+        </div>
+        <div class="report-loading">
+          <div class="report-spinner"></div>
+          <span>AI가 체성분을 분석하고 있어요...</span>
+        </div>
+      </div>`;
+  }
+
+  let html = reportHtml + `
     <div class="stat-card">
       <div class="stat-item">
         <div class="stat-label">체중</div>
@@ -1014,6 +1099,8 @@ function applyData(p) {
 
   closeParse();
   render();
+  // 리포트 생성 (비동기, UI 블록 안 함)
+  generateReport();
 }
 
 function closeParse() { document.getElementById('parse-overlay').classList.remove('open'); }
@@ -1102,6 +1189,100 @@ async function testApi() {
     if (r.ok) { S.apiKey = k; localStorage.setItem('fatcut_key', k); setBadge('ok','연결됨'); }
     else setBadge('err','오류');
   } catch { setBadge('err','오류'); }
+}
+
+
+// ═══════════════════════════════
+//  AI 리포트 생성
+// ═══════════════════════════════
+async function generateReport() {
+  const key = S.apiKey || localStorage.getItem('fatcut_key') || '';
+  if (!key || S.history.length === 0) return;
+
+  const cur  = S.history[0];
+  const prev = S.history[1] || null;
+
+  // 맥락 데이터 구성
+  const curFatKg  = +(cur.weight * cur.fatPct / 100).toFixed(1);
+  const goalFatKg = +(S.weight   * S.goalFatPct / 100).toFixed(1);
+  const remainKg  = Math.max(0, curFatKg - goalFatKg).toFixed(1);
+
+  let context = '';
+  let mode    = 'baseline';
+
+  if (!prev) {
+    // 첫 측정 — 베이스라인 분석
+    context = `
+사용자의 첫 번째 인바디 측정 결과입니다.
+- 체중: ${cur.weight}kg
+- 골격근량: ${cur.muscle}kg
+- 체지방률: ${cur.fatPct}%
+- 체지방량: ${curFatKg}kg
+- 목표 체지방률: ${S.goalFatPct}%
+- 목표까지 남은 체지방: ${remainKg}kg`;
+    mode = 'baseline';
+  } else {
+    const fatDiff    = +(cur.fatPct - prev.fatPct).toFixed(2);
+    const muscleDiff = +(cur.muscle - prev.muscle).toFixed(2);
+    const fatKgDiff  = +(curFatKg - (prev.weight * prev.fatPct / 100)).toFixed(2);
+    mode = fatDiff > 0.1 ? 'warning' : 'good';
+
+    context = `
+이전 측정 대비 변화입니다.
+이전: 체중 ${prev.weight}kg | 골격근 ${prev.muscle}kg | 체지방률 ${prev.fatPct}%
+현재: 체중 ${cur.weight}kg  | 골격근 ${cur.muscle}kg  | 체지방률 ${cur.fatPct}%
+변화: 체지방률 ${fatDiff > 0 ? '+' : ''}${fatDiff}% | 골격근 ${muscleDiff > 0 ? '+' : ''}${muscleDiff}kg | 체지방량 ${fatKgDiff > 0 ? '+' : ''}${fatKgDiff}kg
+목표 체지방률: ${S.goalFatPct}% (남은 체지방 ${remainKg}kg)
+방향: ${mode === 'warning' ? '체지방 증가 또는 정체' : '체지방 감소'}`;
+  }
+
+  const systemPrompt = `당신은 체성분 분석 전문 코치입니다. 인바디 데이터를 보고 사용자에게 동기를 주는 짧고 임팩트 있는 리포트를 작성합니다.
+
+규칙:
+1. 2~4문장, 150자 이내
+2. 구체적인 비유를 사용하세요 (예: "혈관 속 기름기가 우유 한 컵만큼 사라진 것")
+3. 숫자를 체감할 수 있게 변환하세요
+4. 좋은 방향이면: 칭찬 + 다음 milestone에서 어떤 변화가 생기는지 예고
+5. 나쁜 방향이면: 이 추세가 지속되면 n주 후 몸 상태가 어떻게 악화되는지 구체적으로 경고
+6. 첫 측정이면: 현재 체지방량을 시각적으로 표현하고 목표 달성 시 어떤 변화가 생기는지
+7. HTML 태그 사용 가능: <span class="highlight">강조</span> 또는 <span class="warn-text">경고</span>
+8. 반드시 한국어로, 존댓말 사용`;
+
+  try {
+    const proxy    = S.proxyUrl || localStorage.getItem('fatcut_proxy') || '';
+    const endpoint = proxy
+      ? proxy.replace(/\/$/, '') + '/v1/messages'
+      : 'https://api.anthropic.com/v1/messages';
+    const headers  = proxy
+      ? { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+      : { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: context }]
+      })
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+    const text = data.content?.[0]?.text?.trim() || '';
+    if (!text) return;
+
+    const now  = new Date();
+    const date = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    S.reports.unshift({ date, text, type: mode });
+    // 최대 10개 유지
+    if (S.reports.length > 10) S.reports.pop();
+    renderHome();
+
+  } catch (e) {
+    console.warn('리포트 생성 실패:', e);
+  }
 }
 
 // ═══════════════════════════════
