@@ -717,6 +717,24 @@
       </div>
     </div>
 
+    <div class="section-label">기기 정보</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div style="flex:1">
+          <div class="row-label">기기 ID</div>
+          <div class="row-sub" id="device-id-display" style="font-family:monospace;font-size:10px;word-break:break-all;margin-top:4px;color:var(--green)">로딩중...</div>
+        </div>
+        <button onclick="copyDeviceId()" style="background:var(--card2);border:none;border-radius:10px;padding:8px 12px;font-family:'Pretendard',sans-serif;font-size:12px;color:var(--gray3);cursor:pointer;flex-shrink:0;margin-left:8px">복사</button>
+      </div>
+      <div style="padding:0 16px 14px">
+        <div class="row-sub">새 기기에서 같은 ID 입력 시 데이터 복원</div>
+        <input class="s-input" id="device-id-input" type="text"
+          placeholder="다른 기기 ID 입력 (데이터 이전용)"
+          style="width:100%;text-align:left;font-size:12px;font-weight:500;margin-top:8px;color:var(--white)">
+        <button onclick="changeDeviceId()" style="width:100%;background:var(--card2);border:none;border-radius:10px;padding:10px;font-family:'Pretendard',sans-serif;font-size:13px;color:var(--gray2);cursor:pointer;margin-top:6px">이 ID로 데이터 불러오기</button>
+      </div>
+    </div>
+
     <button class="primary-btn" onclick="saveSettings()">저장</button>
 
   </div>
@@ -1101,6 +1119,9 @@ function applyData(p) {
   const delta = parseFloat(((p.fatPct ?? 0) - prev).toFixed(1));
   S.history.unshift({ date, weight: p.weight??S.weight, muscle: p.muscle??S.muscle, fatPct: p.fatPct??S.fatPct, delta });
 
+  // deviceId 확실히 초기화
+  if (!S.deviceId) S.deviceId = getDeviceId();
+
   saveData();
   closeParse();
   render();
@@ -1108,8 +1129,11 @@ function applyData(p) {
   // Supabase에 측정 기록 저장 후 리포트 생성
   (async () => {
     const inserted = await saveMeasurementToSupabase({
-      weight: p.weight, muscle: p.muscle, fatPct: p.fatPct,
-      visceralFat: p.visceralFat, bmr: p.bmr
+      weight:      p.weight      ?? S.weight,
+      muscle:      p.muscle      ?? S.muscle,
+      fatPct:      p.fatPct      ?? S.fatPct,
+      visceralFat: p.visceralFat ?? null,
+      bmr:         p.bmr         ?? null,
     }, null, null);
     S._lastMeasurementId = inserted?.id || null;
     generateReport();
@@ -1162,6 +1186,10 @@ function openSettings() {
   const p = localStorage.getItem('fatcut_proxy') || '';
   document.getElementById('proxy-url-input').value = p;
   document.getElementById('settings-panel').classList.add('open');
+  // 기기 ID 표시
+  const dId = S.deviceId || getDeviceId();
+  const dEl = document.getElementById('device-id-display');
+  if (dEl) dEl.textContent = dId;
 }
 function closeSettings() { document.getElementById('settings-panel').classList.remove('open'); }
 
@@ -1312,6 +1340,33 @@ async function generateReport() {
 }
 
 // ═══════════════════════════════
+//  기기 ID 관리
+// ═══════════════════════════════
+function copyDeviceId() {
+  const id = S.deviceId || getDeviceId();
+  navigator.clipboard.writeText(id).then(() => {
+    const el = document.getElementById('device-id-display');
+    const orig = el.textContent;
+    el.textContent = '복사됨!';
+    setTimeout(() => el.textContent = orig, 1500);
+  });
+}
+
+async function changeDeviceId() {
+  const newId = document.getElementById('device-id-input')?.value?.trim();
+  if (!newId || newId.length < 10) {
+    alert('올바른 기기 ID를 입력해주세요.');
+    return;
+  }
+  S.deviceId = newId;
+  localStorage.setItem('fatcut_device_id', newId);
+  S.history = [];
+  S.reports = [];
+  closeSettings();
+  await syncFromSupabase();
+}
+
+// ═══════════════════════════════
 //  유틸
 // ═══════════════════════════════
 function toBase64(file) {
@@ -1329,7 +1384,18 @@ function toBase64(file) {
 // ═══════════════════════════════
 const SUPA_URL = 'https://hgxaolnuncunctlreqlv.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneGFvbG51bmN1bmN0bHJlcWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMTM5MDUsImV4cCI6MjA5MTY4OTkwNX0.P7x8C0hXlAftj0Cy5PdpZTpcY_hKwNGXpMqBB4_LQH8';
-const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY, {
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+    }
+  },
+  db: { schema: 'public' },
+  auth: { persistSession: false },
+});
 
 // 기기 ID 초기화 (없으면 생성)
 function getDeviceId() {
@@ -1344,9 +1410,10 @@ function getDeviceId() {
 // ── Supabase에서 데이터 불러오기
 async function syncFromSupabase() {
   const deviceId = S.deviceId;
+  console.log('🔄 Supabase 동기화 시작, deviceId:', deviceId);
   try {
     // 사용자 설정 불러오기
-    const { data: user } = await supa
+    const { data: user, error: userError } = await supa
       .from('users')
       .select('*')
       .eq('device_id', deviceId)
@@ -1360,13 +1427,20 @@ async function syncFromSupabase() {
       S.pace        = user.pace          ?? S.pace;
     }
 
+    if (userError && userError.code !== 'PGRST116') {
+      console.warn('⚠️ 사용자 설정 로드 에러:', userError);
+    }
+
     // 측정 기록 불러오기 (최신순)
-    const { data: measurements } = await supa
+    const { data: measurements, error: measError } = await supa
       .from('measurements')
       .select('*')
       .eq('device_id', deviceId)
       .order('measured_at', { ascending: false })
       .limit(50);
+
+    if (measError) console.warn('⚠️ 측정 기록 로드 에러:', measError);
+    console.log('📥 불러온 측정 기록:', measurements?.length ?? 0, '개');
 
     if (measurements && measurements.length > 0) {
       // 최신 측정값을 현재 상태로
@@ -1420,8 +1494,10 @@ async function syncFromSupabase() {
 
 // ── 사용자 설정 저장
 async function saveUserToSupabase() {
-  const deviceId = S.deviceId;
-  await supa.from('users').upsert({
+  const deviceId = S.deviceId || getDeviceId();
+  if (!deviceId) return;
+
+  const { error } = await supa.from('users').upsert({
     device_id:     deviceId,
     goal_fat_pct:  S.goalFatPct,
     start_fat_pct: S.startFatPct,
@@ -1429,24 +1505,47 @@ async function saveUserToSupabase() {
     mounjaro_cost: S.mounjaro,
     pace:          S.pace,
   }, { onConflict: 'device_id' });
+
+  if (error) console.error('❌ 사용자 설정 저장 실패:', JSON.stringify(error, null, 2));
+  else console.log('✅ 사용자 설정 저장 성공');
 }
 
 // ── 측정 기록 저장
 async function saveMeasurementToSupabase(data, reportText, reportType) {
-  const deviceId = S.deviceId;
-  const { data: inserted, error } = await supa.from('measurements').insert({
-    device_id:    deviceId,
-    weight:       data.weight,
-    muscle:       data.muscle,
-    fat_pct:      data.fatPct,
-    fat_kg:       data.weight && data.fatPct ? +(data.weight * data.fatPct / 100).toFixed(1) : null,
-    visceral_fat: data.visceralFat ?? null,
-    bmr:          data.bmr ?? null,
-    report_text:  reportText  || null,
-    report_type:  reportType  || null,
-  }).select().single();
+  const deviceId = S.deviceId || getDeviceId();
+  if (!deviceId) {
+    console.error('❌ device_id 없음');
+    return null;
+  }
 
-  if (error) console.warn('측정 저장 실패:', error);
+  console.log('📤 Supabase 저장 시도:', { deviceId, ...data });
+
+  const payload = {
+    device_id:    deviceId,
+    weight:       data.weight   ?? null,
+    muscle:       data.muscle   ?? null,
+    fat_pct:      data.fatPct   ?? null,
+    fat_kg:       (data.weight && data.fatPct)
+                    ? +(data.weight * data.fatPct / 100).toFixed(1)
+                    : null,
+    visceral_fat: data.visceralFat ?? null,
+    bmr:          data.bmr         ?? null,
+    report_text:  reportText       || null,
+    report_type:  reportType       || null,
+  };
+
+  const { data: inserted, error } = await supa
+    .from('measurements')
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('❌ 측정 저장 실패:', JSON.stringify(error, null, 2));
+    return null;
+  }
+
+  console.log('✅ 측정 저장 성공:', inserted?.id);
   return inserted;
 }
 
