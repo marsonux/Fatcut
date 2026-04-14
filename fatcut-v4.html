@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>FATCUT</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
   :root {
@@ -744,7 +745,10 @@ const S = {
   history: [],
   apiKey: '',
   proxyUrl: '',
-  reports: [], // {date, text, type: 'good'|'warning'|'baseline'} // Cloudflare Worker URL (모바일 CORS 우회)
+  reports: [], // {date, text, type: 'good'|'warning'|'baseline'}
+  reportLoading: false,
+  deviceId: '',    // 기기 고유 ID (로그인 없이 사용자 식별)
+  syncing: false,  // Supabase 동기화 중 여부 // Cloudflare Worker URL (모바일 CORS 우회)
 };
 
 const EFFECTS = [
@@ -820,7 +824,7 @@ function renderHome() {
         </div>
         <div class="report-body">${r.text}</div>
       </div>`;
-  } else if (S.history.length > 0) {
+  } else if (S.history.length > 0 && S.reportLoading) {
     reportHtml = `
       <div class="report-card">
         <div class="report-header">
@@ -1097,10 +1101,19 @@ function applyData(p) {
   const delta = parseFloat(((p.fatPct ?? 0) - prev).toFixed(1));
   S.history.unshift({ date, weight: p.weight??S.weight, muscle: p.muscle??S.muscle, fatPct: p.fatPct??S.fatPct, delta });
 
+  saveData();
   closeParse();
   render();
-  // 리포트 생성 (비동기, UI 블록 안 함)
-  generateReport();
+
+  // Supabase에 측정 기록 저장 후 리포트 생성
+  (async () => {
+    const inserted = await saveMeasurementToSupabase({
+      weight: p.weight, muscle: p.muscle, fatPct: p.fatPct,
+      visceralFat: p.visceralFat, bmr: p.bmr
+    }, null, null);
+    S._lastMeasurementId = inserted?.id || null;
+    generateReport();
+  })();
 }
 
 function closeParse() { document.getElementById('parse-overlay').classList.remove('open'); }
@@ -1161,6 +1174,8 @@ function saveSettings() {
   S.goalFatPct  = parseFloat(document.getElementById('cfg-goal-fat').value) || 18;
   S.mounjaro    = parseFloat(document.getElementById('cfg-mounjaro').value) || 340000;
   S.pace        = parseFloat(document.getElementById('cfg-pace').value) || 0.5;
+  saveData();
+  saveUserToSupabase(); // Supabase에도 동기화
   closeSettings();
   render();
 }
@@ -1198,6 +1213,9 @@ async function testApi() {
 async function generateReport() {
   const key = S.apiKey || localStorage.getItem('fatcut_key') || '';
   if (!key || S.history.length === 0) return;
+
+  S.reportLoading = true;
+  renderHome();
 
   const cur  = S.history[0];
   const prev = S.history[1] || null;
@@ -1276,12 +1294,20 @@ async function generateReport() {
     const now  = new Date();
     const date = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     S.reports.unshift({ date, text, type: mode });
-    // 최대 10개 유지
     if (S.reports.length > 10) S.reports.pop();
+    S.reportLoading = false;
     renderHome();
+
+    // Supabase 리포트 업데이트
+    if (S._lastMeasurementId) {
+      updateReportInSupabase(S._lastMeasurementId, text, mode);
+    }
 
   } catch (e) {
     console.warn('리포트 생성 실패:', e);
+    S.reportLoading = false;
+    // 실패해도 UI는 조용히 처리 (스피너만 제거)
+    renderHome();
   }
 }
 
@@ -1297,13 +1323,186 @@ function toBase64(file) {
   });
 }
 
+
+// ═══════════════════════════════
+//  Supabase 클라이언트
+// ═══════════════════════════════
+const SUPA_URL = 'https://hgxaolnuncunctlreqlv.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneGFvbG51bmN1bmN0bHJlcWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMTM5MDUsImV4cCI6MjA5MTY4OTkwNX0.P7x8C0hXlAftj0Cy5PdpZTpcY_hKwNGXpMqBB4_LQH8';
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// 기기 ID 초기화 (없으면 생성)
+function getDeviceId() {
+  let id = localStorage.getItem('fatcut_device_id');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('fatcut_device_id', id);
+  }
+  return id;
+}
+
+// ── Supabase에서 데이터 불러오기
+async function syncFromSupabase() {
+  const deviceId = S.deviceId;
+  try {
+    // 사용자 설정 불러오기
+    const { data: user } = await supa
+      .from('users')
+      .select('*')
+      .eq('device_id', deviceId)
+      .single();
+
+    if (user) {
+      S.goalFatPct  = user.goal_fat_pct  ?? S.goalFatPct;
+      S.startFatPct = user.start_fat_pct ?? S.startFatPct;
+      S.startWeight = user.start_weight  ?? S.startWeight;
+      S.mounjaro    = user.mounjaro_cost ?? S.mounjaro;
+      S.pace        = user.pace          ?? S.pace;
+    }
+
+    // 측정 기록 불러오기 (최신순)
+    const { data: measurements } = await supa
+      .from('measurements')
+      .select('*')
+      .eq('device_id', deviceId)
+      .order('measured_at', { ascending: false })
+      .limit(50);
+
+    if (measurements && measurements.length > 0) {
+      // 최신 측정값을 현재 상태로
+      const latest = measurements[0];
+      S.weight  = latest.weight  ?? S.weight;
+      S.muscle  = latest.muscle  ?? S.muscle;
+      S.fatPct  = latest.fat_pct ?? S.fatPct;
+
+      // 히스토리 재구성
+      S.history = measurements.map(m => {
+        const date = new Date(m.measured_at);
+        const dateStr = `${date.getMonth()+1}/${date.getDate()}`;
+        return {
+          id:        m.id,
+          date:      dateStr,
+          weight:    m.weight,
+          muscle:    m.muscle,
+          fatPct:    m.fat_pct,
+          delta:     0, // 아래서 계산
+          reportText: m.report_text,
+          reportType: m.report_type,
+        };
+      });
+
+      // delta 계산 (이전 측정 대비 체지방률 변화)
+      for (let i = 0; i < S.history.length - 1; i++) {
+        S.history[i].delta = parseFloat(
+          (S.history[i].fatPct - S.history[i+1].fatPct).toFixed(2)
+        );
+      }
+
+      // 리포트 복원 (저장된 리포트가 있는 것만)
+      S.reports = measurements
+        .filter(m => m.report_text)
+        .map(m => {
+          const date = new Date(m.measured_at);
+          return {
+            date: `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`,
+            text: m.report_text,
+            type: m.report_type || 'baseline',
+          };
+        });
+    }
+
+    render();
+  } catch(e) {
+    console.warn('Supabase 동기화 실패:', e);
+    render(); // 로컬 데이터로 렌더링
+  }
+}
+
+// ── 사용자 설정 저장
+async function saveUserToSupabase() {
+  const deviceId = S.deviceId;
+  await supa.from('users').upsert({
+    device_id:     deviceId,
+    goal_fat_pct:  S.goalFatPct,
+    start_fat_pct: S.startFatPct,
+    start_weight:  S.startWeight,
+    mounjaro_cost: S.mounjaro,
+    pace:          S.pace,
+  }, { onConflict: 'device_id' });
+}
+
+// ── 측정 기록 저장
+async function saveMeasurementToSupabase(data, reportText, reportType) {
+  const deviceId = S.deviceId;
+  const { data: inserted, error } = await supa.from('measurements').insert({
+    device_id:    deviceId,
+    weight:       data.weight,
+    muscle:       data.muscle,
+    fat_pct:      data.fatPct,
+    fat_kg:       data.weight && data.fatPct ? +(data.weight * data.fatPct / 100).toFixed(1) : null,
+    visceral_fat: data.visceralFat ?? null,
+    bmr:          data.bmr ?? null,
+    report_text:  reportText  || null,
+    report_type:  reportType  || null,
+  }).select().single();
+
+  if (error) console.warn('측정 저장 실패:', error);
+  return inserted;
+}
+
+// ── 리포트 생성 후 해당 측정 기록 업데이트
+async function updateReportInSupabase(measurementId, reportText, reportType) {
+  if (!measurementId) return;
+  await supa.from('measurements').update({
+    report_text: reportText,
+    report_type: reportType,
+  }).eq('id', measurementId);
+}
+
+// ═══════════════════════════════
+//  데이터 영속성 (localStorage)
+// ═══════════════════════════════
+function saveData() {
+  const data = {
+    weight:      S.weight,
+    muscle:      S.muscle,
+    fatPct:      S.fatPct,
+    startFatPct: S.startFatPct,
+    startWeight: S.startWeight,
+    goalFatPct:  S.goalFatPct,
+    mounjaro:    S.mounjaro,
+    pace:        S.pace,
+    history:     S.history,
+    reports:     S.reports,
+  };
+  localStorage.setItem('fatcut_data', JSON.stringify(data));
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem('fatcut_data');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    Object.assign(S, d);
+  } catch(e) {
+    console.warn('데이터 로드 실패:', e);
+  }
+}
+
 // ═══════════════════════════════
 //  초기화
 // ═══════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
-  S.apiKey = localStorage.getItem('fatcut_key') || '';
+document.addEventListener('DOMContentLoaded', async () => {
+  S.apiKey   = localStorage.getItem('fatcut_key')   || '';
   S.proxyUrl = localStorage.getItem('fatcut_proxy') || '';
+  S.deviceId = getDeviceId();
+
+  // 로컬 데이터 먼저 렌더 (빠른 초기 표시)
+  loadData();
   render();
+
+  // Supabase에서 최신 데이터 동기화
+  await syncFromSupabase();
 });
 </script>
 </body>
