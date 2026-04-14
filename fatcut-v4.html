@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>FATCUT</title>
@@ -827,6 +827,14 @@ function renderHome() {
   const wksLeft    = remainKg / S.pace;
   const future     = Math.round(wksLeft * (S.mounjaro / 4.33));
 
+  // 이번 측정에서 번 돈 (직전 측정 대비 체지방 감소분)
+  const latestDelta  = S.history.length >= 2
+    ? (S.history[1].weight * S.history[1].fatPct / 100) - curFatKg
+    : 0;
+  const thisWeekSaved = latestDelta > 0
+    ? Math.round((latestDelta / S.pace) * (S.mounjaro / 4.33))
+    : 0;
+
   // 리포트 섹션 (최신 1개)
   let reportHtml = '';
   if (S.reports.length > 0) {
@@ -877,19 +885,30 @@ function renderHome() {
         <span style="font-size:18px;font-weight:800;color:var(--green)">% 감량</span>
       </div>
     </div>
+    ${thisWeekSaved > 0 ? `
+    <div class="card" style="border:1px solid rgba(0,251,92,0.25)">
+      <div class="card-label">이번 측정에서 번 돈 💸</div>
+      <div style="display:flex;align-items:baseline;gap:2px">
+        <span class="card-value">+${thisWeekSaved.toLocaleString('ko-KR')}</span>
+        <span class="card-unit">원</span>
+      </div>
+      <div style="font-size:11px;color:var(--gray2);margin-top:6px">체지방 ${latestDelta.toFixed(1)}kg 감량 → 마운자로 ${Math.round(latestDelta/S.pace)}회분 절약</div>
+    </div>` : ''}
     <div class="card">
-      <div class="card-label">다이어트 시작일로부터 아낀 마운자로 금액</div>
+      <div class="card-label">지금까지 아낀 금액 💰</div>
       <div style="display:flex;align-items:baseline;gap:2px">
         <span class="card-value">${saved.toLocaleString('ko-KR')}</span>
         <span class="card-unit">원</span>
       </div>
+      <div style="font-size:11px;color:var(--gray2);margin-top:6px">시작 이후 ${lostKg.toFixed(1)}kg 체지방 감량 기준</div>
     </div>
     <div class="card">
-      <div class="card-label">목표 ${S.goalFatPct}%까지 추가 절약 예상</div>
+      <div class="card-label">지금 마운자로 맞으면 드는 돈 🎯</div>
       <div style="display:flex;align-items:baseline;gap:2px">
-        <span class="card-value">${future.toLocaleString('ko-KR')}</span>
-        <span class="card-unit">원</span>
+        <span class="card-value" style="color:var(--red)">${future.toLocaleString('ko-KR')}</span>
+        <span class="card-unit" style="color:var(--red)">원</span>
       </div>
+      <div style="font-size:11px;color:var(--gray2);margin-top:6px">체지방 ${remainKg.toFixed(1)}kg 남음 · 약 ${Math.ceil(wksLeft)}주 예상</div>
     </div>`;
 
   EFFECTS.forEach(e => {
@@ -1229,8 +1248,15 @@ async function testApi() {
       headers: hdrs,
       body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:10, messages:[{role:'user',content:'hi'}] })
     });
-    if (r.ok) { S.apiKey = k; localStorage.setItem('fatcut_key', k); setBadge('ok','연결됨'); }
-    else setBadge('err','오류');
+    if (r.ok) {
+      S.apiKey = k;
+      localStorage.setItem('fatcut_key', k);
+      setBadge('ok','연결됨');
+    } else {
+      const errBody = await r.json().catch(() => ({}));
+      console.warn('API 테스트 실패:', r.status, errBody?.error?.message || errBody);
+      setBadge('err', r.status === 401 ? '인증오류' : r.status === 403 ? '권한오류' : `오류(${r.status})`);
+    }
   } catch { setBadge('err','오류'); }
 }
 
@@ -1273,26 +1299,56 @@ async function generateReport() {
     const fatKgDiff  = +(curFatKg - (prev.weight * prev.fatPct / 100)).toFixed(2);
     mode = fatDiff > 0.1 ? 'warning' : 'good';
 
+    // 전체 트렌드 (최근 4개)
+    const trendStr = S.history.slice(0, 4).map((h, i) =>
+      `${h.date}: 체지방 ${h.fatPct}% / 골격근 ${h.muscle}kg`
+    ).join('\n');
+
     context = `
 이전 측정 대비 변화입니다.
 이전: 체중 ${prev.weight}kg | 골격근 ${prev.muscle}kg | 체지방률 ${prev.fatPct}%
 현재: 체중 ${cur.weight}kg  | 골격근 ${cur.muscle}kg  | 체지방률 ${cur.fatPct}%
 변화: 체지방률 ${fatDiff > 0 ? '+' : ''}${fatDiff}% | 골격근 ${muscleDiff > 0 ? '+' : ''}${muscleDiff}kg | 체지방량 ${fatKgDiff > 0 ? '+' : ''}${fatKgDiff}kg
-목표 체지방률: ${S.goalFatPct}% (남은 체지방 ${remainKg}kg)
-방향: ${mode === 'warning' ? '체지방 증가 또는 정체' : '체지방 감소'}`;
+목표 체지방률: ${S.goalFatPct}% (남은 체지방 ${remainKg}kg / 약 ${Math.ceil(remainKg/S.pace)}주)
+방향: ${mode === 'warning' ? '체지방 증가 또는 정체' : '체지방 감소'}
+
+최근 측정 트렌드:
+${trendStr}`;
   }
 
-  const systemPrompt = `당신은 체성분 분석 전문 코치입니다. 인바디 데이터를 보고 사용자에게 동기를 주는 짧고 임팩트 있는 리포트를 작성합니다.
+  // 리포트 번호 기반으로 톤 모드 순환 (매번 다른 스타일)
+  const toneIndex = S.reports.length % 4;
+  const toneGuide = [
+    '코치 모드: 따뜻하게 칭찬하되 다음 액션을 구체적으로 제시하세요.',
+    '팩폭 모드: 솔직하고 직설적으로, 포장 없이 현실을 말하세요. 냉정하지만 틀리지 않게.',
+    '데이터 모드: 수치와 비율 중심으로, 체지방/근육 비율 변화를 분석적으로 설명하세요.',
+    '미래예측 모드: 지금 추세가 4주·8주 지속되면 몸이 어떻게 달라질지 구체적으로 예측하세요.',
+  ][toneIndex];
+
+  // 비유 카테고리 순환 (매번 다른 비유)
+  const analogyIndex = S.reports.length % 5;
+  const analogyGuide = [
+    '일상 사물 비유: 아이폰 무게, 물병, 책 무게 등 손에 잡히는 물건으로 체지방량을 표현하세요.',
+    '신체 체감 비유: 관절 부하, 심장 부담, 혈관 상태 등 몸 안의 변화로 표현하세요.',
+    '시간/속도 비유: "이 페이스면 몇 주 후 어떤 옷을 입을 수 있다" 등 시간축으로 표현하세요.',
+    '경제적 비유: 마운자로 몇 회분, 이번 달 식비 등 돈으로 환산해서 표현하세요.',
+    '사회적 비유: 의사가 먼저 알아챌 수준, 주변에서 물어볼 시점 등 사회적 맥락으로 표현하세요.',
+  ][analogyIndex];
+
+  const systemPrompt = `당신은 체성분 분석 코치입니다. 인바디 데이터를 보고 짧고 임팩트 있는 리포트를 작성합니다.
+
+오늘의 톤: ${toneGuide}
+오늘의 비유 방식: ${analogyGuide}
 
 규칙:
-1. 2~4문장, 150자 이내
-2. 구체적인 비유를 사용하세요 (예: "혈관 속 기름기가 우유 한 컵만큼 사라진 것")
-3. 숫자를 체감할 수 있게 변환하세요
-4. 좋은 방향이면: 칭찬 + 다음 milestone에서 어떤 변화가 생기는지 예고
-5. 나쁜 방향이면: 이 추세가 지속되면 n주 후 몸 상태가 어떻게 악화되는지 구체적으로 경고
-6. 첫 측정이면: 현재 체지방량을 시각적으로 표현하고 목표 달성 시 어떤 변화가 생기는지
-7. HTML 태그 사용 가능: <span class="highlight">강조</span> 또는 <span class="warn-text">경고</span>
-8. 반드시 한국어로, 존댓말 사용`;
+1. 반드시 위의 톤과 비유 방식을 따를 것
+2. 2~4문장, 200자 이내
+3. 트렌드가 있으면 단순 비교가 아닌 흐름을 언급할 것
+4. 좋은 방향: 다음 milestone(수면/테스토스테론/관절 등)까지 얼마나 남았는지 예고
+5. 나쁜 방향: 이 추세 지속 시 n주 후 구체적 결과 경고 (단순 "주의하세요" 금지)
+6. 첫 측정: 현재 체지방 총량을 위의 비유로 표현 + 목표 달성 시 변화 예고
+7. HTML 사용 가능: <span class="highlight">강조</span> 또는 <span class="warn-text">경고문구</span>
+8. 반드시 한국어, 존댓말`;
 
   try {
     const proxy    = S.proxyUrl || localStorage.getItem('fatcut_proxy') || '';
@@ -1407,17 +1463,42 @@ function getDeviceId() {
   return id;
 }
 
+// ── Supabase REST 직접 호출 헬퍼 (SDK 대신 사용 - 모바일 호환성 높음)
+async function supaFetch(path, options = {}) {
+  const url = SUPA_URL + '/rest/v1/' + path;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...(options.headers || {}),
+    }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`[${res.status}] ${err.message || err.code || res.statusText}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
 // ── Supabase에서 데이터 불러오기
 async function syncFromSupabase() {
   const deviceId = S.deviceId;
   console.log('🔄 Supabase 동기화 시작, deviceId:', deviceId);
   try {
     // 사용자 설정 불러오기
-    const { data: user, error: userError } = await supa
-      .from('users')
-      .select('*')
-      .eq('device_id', deviceId)
-      .single();
+    let user = null;
+    try {
+      const userList = await supaFetch(
+        `users?device_id=eq.${encodeURIComponent(deviceId)}&limit=1`
+      );
+      user = userList?.[0] || null;
+    } catch(e) {
+      console.warn('⚠️ 사용자 설정 로드 실패:', e.message);
+    }
 
     if (user) {
       S.goalFatPct  = user.goal_fat_pct  ?? S.goalFatPct;
@@ -1427,19 +1508,15 @@ async function syncFromSupabase() {
       S.pace        = user.pace          ?? S.pace;
     }
 
-    if (userError && userError.code !== 'PGRST116') {
-      console.warn('⚠️ 사용자 설정 로드 에러:', userError);
-    }
-
     // 측정 기록 불러오기 (최신순)
-    const { data: measurements, error: measError } = await supa
-      .from('measurements')
-      .select('*')
-      .eq('device_id', deviceId)
-      .order('measured_at', { ascending: false })
-      .limit(50);
-
-    if (measError) console.warn('⚠️ 측정 기록 로드 에러:', measError);
+    let measurements = null;
+    try {
+      measurements = await supaFetch(
+        `measurements?device_id=eq.${encodeURIComponent(deviceId)}&order=measured_at.desc&limit=50`
+      );
+    } catch(e) {
+      console.warn('⚠️ 측정 기록 로드 실패:', e.message);
+    }
     console.log('📥 불러온 측정 기록:', measurements?.length ?? 0, '개');
 
     if (measurements && measurements.length > 0) {
@@ -1487,8 +1564,8 @@ async function syncFromSupabase() {
 
     render();
   } catch(e) {
-    console.warn('Supabase 동기화 실패:', e);
-    render(); // 로컬 데이터로 렌더링
+    console.warn('Supabase 동기화 실패:', e.message || e);
+    render();
   }
 }
 
@@ -1496,66 +1573,68 @@ async function syncFromSupabase() {
 async function saveUserToSupabase() {
   const deviceId = S.deviceId || getDeviceId();
   if (!deviceId) return;
-
-  const { error } = await supa.from('users').upsert({
-    device_id:     deviceId,
-    goal_fat_pct:  S.goalFatPct,
-    start_fat_pct: S.startFatPct,
-    start_weight:  S.startWeight,
-    mounjaro_cost: S.mounjaro,
-    pace:          S.pace,
-  }, { onConflict: 'device_id' });
-
-  if (error) console.error('❌ 사용자 설정 저장 실패:', JSON.stringify(error, null, 2));
-  else console.log('✅ 사용자 설정 저장 성공');
+  try {
+    await supaFetch('users', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        device_id:     deviceId,
+        goal_fat_pct:  S.goalFatPct,
+        start_fat_pct: S.startFatPct,
+        start_weight:  S.startWeight,
+        mounjaro_cost: S.mounjaro,
+        pace:          S.pace,
+      })
+    });
+    console.log('✅ 사용자 설정 저장 성공');
+  } catch(e) {
+    console.error('❌ 사용자 설정 저장 실패:', e.message);
+  }
 }
 
 // ── 측정 기록 저장
 async function saveMeasurementToSupabase(data, reportText, reportType) {
   const deviceId = S.deviceId || getDeviceId();
-  if (!deviceId) {
-    console.error('❌ device_id 없음');
-    return null;
-  }
-
-  console.log('📤 Supabase 저장 시도:', { deviceId, ...data });
+  if (!deviceId) { console.error('❌ device_id 없음'); return null; }
 
   const payload = {
     device_id:    deviceId,
     weight:       data.weight   ?? null,
     muscle:       data.muscle   ?? null,
     fat_pct:      data.fatPct   ?? null,
-    fat_kg:       (data.weight && data.fatPct)
-                    ? +(data.weight * data.fatPct / 100).toFixed(1)
-                    : null,
+    fat_kg:       (data.weight && data.fatPct) ? +(data.weight * data.fatPct / 100).toFixed(1) : null,
     visceral_fat: data.visceralFat ?? null,
     bmr:          data.bmr         ?? null,
     report_text:  reportText       || null,
     report_type:  reportType       || null,
   };
 
-  const { data: inserted, error } = await supa
-    .from('measurements')
-    .insert(payload)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('❌ 측정 저장 실패:', JSON.stringify(error, null, 2));
+  console.log('📤 Supabase 저장 시도:', deviceId, payload.fat_pct);
+  try {
+    const result = await supaFetch('measurements', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify(payload)
+    });
+    const inserted = Array.isArray(result) ? result[0] : result;
+    console.log('✅ 측정 저장 성공:', inserted?.id);
+    return inserted;
+  } catch(e) {
+    console.error('❌ 측정 저장 실패:', e.message);
     return null;
   }
-
-  console.log('✅ 측정 저장 성공:', inserted?.id);
-  return inserted;
 }
 
 // ── 리포트 생성 후 해당 측정 기록 업데이트
 async function updateReportInSupabase(measurementId, reportText, reportType) {
   if (!measurementId) return;
-  await supa.from('measurements').update({
-    report_text: reportText,
-    report_type: reportType,
-  }).eq('id', measurementId);
+  try {
+    await supaFetch(`measurements?id=eq.${measurementId}`, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ report_text: reportText, report_type: reportType })
+    });
+  } catch(e) { console.warn('리포트 업데이트 실패:', e.message); }
 }
 
 // ═══════════════════════════════
@@ -1587,6 +1666,20 @@ function loadData() {
     console.warn('데이터 로드 실패:', e);
   }
 }
+
+// ═══════════════════════════════
+//  줌 방지 (모바일 웹앱)
+// ═══════════════════════════════
+document.addEventListener('touchstart', (e) => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+let _lastTap = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - _lastTap < 300) e.preventDefault();
+  _lastTap = now;
+}, { passive: false });
 
 // ═══════════════════════════════
 //  초기화
