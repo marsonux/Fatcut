@@ -522,6 +522,33 @@
     width: 72px; text-align: right;
   }
   .manual-unit { font-size: 13px; color: var(--gray2); }
+
+  /* ── 토스트 ── */
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    background: var(--card); color: var(--white);
+    padding: 10px 20px; border-radius: 20px;
+    font-size: 13px; font-weight: 600;
+    z-index: 9999; opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+  }
+  .toast.show { opacity: 1; }
+  .toast.ok   { border-color: rgba(0,251,92,0.25); }
+  .toast.err  { border-color: rgba(255,59,73,0.25); color: var(--red); }
+
+  /* ── 동기화 상태 뱃지 ── */
+  .sync-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px;
+    background: rgba(143,145,156,0.15); color: var(--gray2);
+  }
+  .sync-badge.ok  { background: rgba(0,251,92,0.12); color: var(--green); }
+  .sync-badge.err { background: rgba(255,59,73,0.12); color: var(--red); }
 </style>
 </head>
 <body>
@@ -738,12 +765,17 @@
         </div>
         <button onclick="copyDeviceId()" style="background:var(--card2);border:none;border-radius:10px;padding:8px 12px;font-family:'Pretendard',sans-serif;font-size:12px;color:var(--gray3);cursor:pointer;flex-shrink:0;margin-left:8px">복사</button>
       </div>
+      <div class="settings-row" style="justify-content:space-between">
+        <div class="row-label">Supabase 동기화</div>
+        <span class="sync-badge" id="sync-badge">대기중</span>
+      </div>
       <div style="padding:0 16px 14px">
         <div class="row-sub">새 기기에서 같은 ID 입력 시 데이터 복원</div>
         <input class="s-input" id="device-id-input" type="text"
           placeholder="다른 기기 ID 입력 (데이터 이전용)"
           style="width:100%;text-align:left;font-size:12px;font-weight:500;margin-top:8px;color:var(--white)">
-        <button onclick="changeDeviceId()" style="width:100%;background:var(--card2);border:none;border-radius:10px;padding:10px;font-family:'Pretendard',sans-serif;font-size:13px;color:var(--gray2);cursor:pointer;margin-top:6px">이 ID로 데이터 불러오기</button>
+        <button onclick="changeDeviceId()" id="change-id-btn" style="width:100%;background:var(--card2);border:none;border-radius:10px;padding:10px;font-family:'Pretendard',sans-serif;font-size:13px;color:var(--gray2);cursor:pointer;margin-top:6px">이 ID로 데이터 불러오기</button>
+        <button onclick="forceSyncFromSupabase()" style="width:100%;background:var(--card2);border:none;border-radius:10px;padding:10px;font-family:'Pretendard',sans-serif;font-size:13px;color:var(--green);cursor:pointer;margin-top:6px">↻ 지금 동기화</button>
       </div>
     </div>
 
@@ -1408,6 +1440,30 @@ ${trendStr}`;
 }
 
 // ═══════════════════════════════
+//  토스트 알림
+// ═══════════════════════════════
+function showToast(msg, type = '', duration = 2500) {
+  let el = document.getElementById('fatcut-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'fatcut-toast';
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.className = `toast ${type}`;
+  void el.offsetWidth; // reflow
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function setSyncBadge(cls, text) {
+  const el = document.getElementById('sync-badge');
+  if (el) { el.className = `sync-badge ${cls}`; el.textContent = text; }
+}
+
+// ═══════════════════════════════
 //  기기 ID 관리
 // ═══════════════════════════════
 function copyDeviceId() {
@@ -1423,15 +1479,24 @@ function copyDeviceId() {
 async function changeDeviceId() {
   const newId = document.getElementById('device-id-input')?.value?.trim();
   if (!newId || newId.length < 10) {
-    alert('올바른 기기 ID를 입력해주세요.');
+    showToast('❌ 올바른 기기 ID를 입력해주세요', 'err');
     return;
   }
+  const btn = document.getElementById('change-id-btn');
+  if (btn) { btn.textContent = '동기화 중...'; btn.disabled = true; }
   S.deviceId = newId;
   localStorage.setItem('fatcut_device_id', newId);
   S.history = [];
   S.reports = [];
   closeSettings();
   await syncFromSupabase();
+  if (btn) { btn.textContent = '이 ID로 데이터 불러오기'; btn.disabled = false; }
+}
+
+async function forceSyncFromSupabase() {
+  setSyncBadge('', '동기화 중...');
+  await syncFromSupabase();
+  closeSettings();
 }
 
 // ═══════════════════════════════
@@ -1500,6 +1565,7 @@ async function supaFetch(path, options = {}) {
 async function syncFromSupabase() {
   const deviceId = S.deviceId;
   console.log('🔄 Supabase 동기화 시작, deviceId:', deviceId);
+  setSyncBadge('', '동기화 중...');
   try {
     // 사용자 설정 불러오기
     let user = null;
@@ -1518,6 +1584,12 @@ async function syncFromSupabase() {
       S.startWeight = user.start_weight  ?? S.startWeight;
       S.mounjaro    = user.mounjaro_cost ?? S.mounjaro;
       S.pace        = user.pace          ?? S.pace;
+      // proxy_url 복원 (설정이 없는 신규 파일에서도 자동 복구)
+      if (user.proxy_url && !localStorage.getItem('fatcut_proxy')) {
+        S.proxyUrl = user.proxy_url;
+        localStorage.setItem('fatcut_proxy', user.proxy_url);
+        console.log('✅ proxy_url 복원:', user.proxy_url);
+      }
     }
 
     // 측정 기록 불러오기 (최신순)
@@ -1528,6 +1600,10 @@ async function syncFromSupabase() {
       );
     } catch(e) {
       console.warn('⚠️ 측정 기록 로드 실패:', e.message);
+      setSyncBadge('err', `로드 실패: ${e.message}`);
+      showToast(`⚠️ 동기화 실패: ${e.message}`, 'err', 4000);
+      render();
+      return;
     }
     console.log('📥 불러온 측정 기록:', measurements?.length ?? 0, '개');
 
@@ -1572,11 +1648,21 @@ async function syncFromSupabase() {
             type: m.report_type || 'baseline',
           };
         });
+
+      // 로컬 백업 업데이트 (다음 앱 재시작 때 빠른 로드용)
+      saveData();
+      setSyncBadge('ok', `✓ ${measurements.length}개 기록`);
+      showToast(`✅ ${measurements.length}개 기록 동기화 완료`, 'ok');
+    } else {
+      setSyncBadge('err', '기록 없음');
+      showToast('⚠️ 이 기기 ID에 저장된 기록이 없어요', 'err', 3500);
     }
 
     render();
   } catch(e) {
     console.warn('Supabase 동기화 실패:', e.message || e);
+    setSyncBadge('err', `실패: ${e.message || '알 수 없는 오류'}`);
+    showToast(`⚠️ 동기화 실패: ${e.message || '네트워크 오류'}`, 'err', 4000);
     render();
   }
 }
@@ -1596,6 +1682,7 @@ async function saveUserToSupabase() {
         start_weight:  S.startWeight,
         mounjaro_cost: S.mounjaro,
         pace:          S.pace,
+        proxy_url:     S.proxyUrl || null,
       })
     });
     console.log('✅ 사용자 설정 저장 성공');
