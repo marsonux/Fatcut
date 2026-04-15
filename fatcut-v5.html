@@ -1,0 +1,1713 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>FATCUT</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg:     #161616;
+    --card:   #29293B;
+    --card2:  #1E1E2E;
+    --green:  #00FB5C;
+    --white:  #FFFFFF;
+    --gray1:  #888888;
+    --gray2:  #8F919C;
+    --gray3:  #BEBECE;
+    --red:    #FF3B49;
+    --border: rgba(255,255,255,0.07);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── 앱 루트 ── */
+  #app {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── 스크린 ── */
+  .screen {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+  .screen.active {
+    display: flex;
+    animation: fadeUp 0.2s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── 스크롤 영역 ── */
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-bottom: 20px;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* ── 헤더 ── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px 12px;
+    flex-shrink: 0;
+  }
+  .logo {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--green);
+    letter-spacing: 0.05em;
+  }
+  .header-actions { display: flex; gap: 4px; }
+  .icon-btn {
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 12px;
+    color: var(--white);
+    transition: background 0.15s;
+  }
+  .icon-btn:active { background: rgba(255,255,255,0.08); }
+  .icon-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── 섹션 헤더 ── */
+  .screen-header {
+    padding: 16px 20px 4px;
+    flex-shrink: 0;
+  }
+  .screen-title { font-size: 24px; font-weight: 900; color: var(--white); letter-spacing: -0.03em; }
+  .screen-sub { font-size: 13px; color: var(--gray2); margin-top: 3px; line-height: 1.5; }
+
+  /* ── 카드 공통 ── */
+  .card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 16px 20px;
+    margin: 0 16px 10px;
+  }
+  .card-label {
+    font-size: 12px; font-weight: 500;
+    color: var(--gray2); margin-bottom: 6px;
+  }
+  .card-value {
+    font-size: 36px; font-weight: 800;
+    color: var(--green); letter-spacing: -0.03em; line-height: 1;
+  }
+  .card-unit { font-size: 18px; font-weight: 700; color: var(--green); margin-left: 2px; }
+
+  /* ── 3-stat 카드 ── */
+  .stat-card {
+    background: var(--card);
+    border-radius: 20px;
+    margin: 0 16px 10px;
+    padding: 16px 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .stat-item { display: flex; flex-direction: column; gap: 4px; }
+  .stat-item:not(:last-child) { border-right: 1px solid var(--border); padding-right: 14px; }
+  .stat-item:not(:first-child) { padding-left: 14px; }
+  .stat-label { font-size: 11px; font-weight: 500; color: var(--gray2); }
+  .stat-num { font-size: 24px; font-weight: 800; color: var(--white); letter-spacing: -0.03em; line-height: 1.15; }
+  .stat-unit-sm { font-size: 11px; font-weight: 500; color: var(--gray2); margin-left: 1px; }
+
+  /* ── 효과 카드 ── */
+  .effect-card {
+    background: var(--card2);
+    border-radius: 20px;
+    margin: 0 16px 10px;
+    padding: 18px 20px;
+    border: 1px solid rgba(255,255,255,0.04);
+    position: relative;
+  }
+  .effect-card.achieved {
+    background: #182820;
+    border-color: rgba(0,251,92,0.12);
+  }
+  .effect-badge {
+    position: absolute; top: 14px; right: 14px;
+    background: var(--green); color: #000;
+    font-size: 10px; font-weight: 800;
+    padding: 3px 10px; border-radius: 20px;
+    letter-spacing: 0.02em;
+  }
+  .effect-trigger { font-size: 14px; font-weight: 600; color: var(--white); margin-bottom: 2px; }
+  .effect-headline {
+    font-size: 19px; font-weight: 800;
+    color: var(--white); letter-spacing: -0.02em;
+    line-height: 1.25; margin-bottom: 12px;
+  }
+  .effect-headline .acc { color: var(--green); }
+  .effect-bullets { display: flex; flex-direction: column; gap: 5px; }
+  .effect-bullet {
+    display: flex; align-items: flex-start; gap: 7px;
+    font-size: 12px; color: var(--gray3); line-height: 1.5;
+  }
+  .bdot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--gray1); margin-top: 6px; flex-shrink: 0;
+  }
+  .effect-card.achieved .bdot { background: var(--green); }
+
+  /* ── 프로토콜 카드 ── */
+  .protocol-card {
+    background: var(--card);
+    border-radius: 20px;
+    margin: 0 16px 10px;
+    padding: 20px;
+    text-align: center;
+  }
+  .protocol-name { font-size: 13px; font-weight: 600; color: var(--white); margin-bottom: 8px; }
+  .protocol-big { font-size: 48px; font-weight: 900; color: var(--green); letter-spacing: -0.04em; line-height: 1; }
+  .protocol-unit2 { font-size: 18px; font-weight: 600; color: var(--gray2); margin-left: 3px; }
+  .protocol-desc { font-size: 12px; color: var(--gray2); line-height: 1.6; margin-top: 10px; }
+  .protocol-desc .hl { color: var(--green); }
+
+  /* ── 히스토리 카드 ── */
+  .history-card {
+    background: var(--card);
+    border-radius: 20px;
+    margin: 0 16px 10px;
+    padding: 16px 20px;
+  }
+  .history-hdr {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-bottom: 10px; margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .history-date { font-size: 14px; font-weight: 700; color: var(--white); }
+  .history-delta { font-size: 14px; font-weight: 700; }
+  .history-delta.good { color: var(--green); }
+  .history-delta.bad  { color: var(--red); }
+  .history-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+  .h-stat { display: flex; flex-direction: column; gap: 3px; }
+  .h-stat:not(:last-child) { border-right: 1px solid var(--border); padding-right: 10px; }
+  .h-stat:not(:first-child) { padding-left: 10px; }
+  .h-label { font-size: 10px; font-weight: 500; color: var(--gray2); }
+  .h-val { font-size: 20px; font-weight: 800; color: var(--white); letter-spacing: -0.03em; }
+  .h-unit { font-size: 10px; color: var(--gray2); margin-left: 1px; }
+
+
+  /* ── AI 리포트 카드 ── */
+  .report-card {
+    background: var(--card2);
+    border-radius: 20px;
+    margin: 0 16px 10px;
+    padding: 18px 20px;
+    border: 1px solid rgba(0,251,92,0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .report-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--green), transparent);
+  }
+  .report-card.warning {
+    border-color: rgba(255,59,73,0.15);
+  }
+  .report-card.warning::before {
+    background: linear-gradient(90deg, var(--red), transparent);
+  }
+  .report-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 12px;
+  }
+  .report-tag {
+    font-size: 10px; font-weight: 800;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 20px;
+    background: rgba(0,251,92,0.12); color: var(--green);
+  }
+  .report-tag.warn { background: rgba(255,59,73,0.12); color: var(--red); }
+  .report-date { font-size: 11px; color: var(--gray2); margin-left: auto; }
+  .report-body {
+    font-size: 14px; color: var(--white);
+    line-height: 1.75; letter-spacing: -0.01em;
+  }
+  .report-body .highlight { color: var(--green); font-weight: 700; }
+  .report-body .warn-text { color: var(--red); font-weight: 700; }
+  .report-loading {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--gray2);
+    padding: 4px 0;
+  }
+  .report-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(0,251,92,0.2);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  /* ── 빈 상태 ── */
+  .empty-state {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 32px 32px 60px;
+    text-align: center;
+  }
+  .empty-icon {
+    width: 68px; height: 68px;
+    background: var(--card);
+    border-radius: 22px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; margin-bottom: 20px;
+  }
+  .empty-title { font-size: 19px; font-weight: 800; color: var(--white); letter-spacing: -0.02em; margin-bottom: 8px; }
+  .empty-sub { font-size: 14px; color: var(--gray2); line-height: 1.65; margin-bottom: 28px; }
+  .empty-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--green); color: #000;
+    border: none; border-radius: 16px;
+    padding: 14px 28px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 800;
+    cursor: pointer;
+  }
+  .empty-btn:active { opacity: 0.85; }
+  .empty-btn svg { width: 18px; height: 18px; stroke: #000; fill: none; stroke-width: 2.5; stroke-linecap: round; }
+
+  /* ── 탭바 ── */
+  .tabbar {
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 10px 0;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    background: #000000;
+    flex-shrink: 0;
+  }
+  .tab-item {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer; opacity: 0.35;
+    transition: opacity 0.18s;
+    padding: 4px 20px; min-width: 64px;
+  }
+  .tab-item.active { opacity: 1; }
+  .tab-item svg { width: 24px; height: 24px; stroke: var(--white); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .tab-item.active svg { stroke: var(--green); }
+  .tab-label { font-size: 10px; font-weight: 600; color: var(--white); letter-spacing: 0.01em; }
+  .tab-item.active .tab-label { color: var(--green); }
+
+  /* ── 오버레이 공통 ── */
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); z-index: 100;
+    align-items: flex-end; justify-content: center;
+  }
+  .overlay.open { display: flex; }
+
+  /* ── 바텀시트 ── */
+  .sheet {
+    width: 100%; max-width: 480px;
+    background: #1C1C28;
+    border-radius: 24px 24px 0 0;
+    padding: 12px 16px;
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+    animation: slideUp 0.26s cubic-bezier(0.32,0.72,0,1);
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px; margin: 0 auto 16px;
+  }
+  .sheet-title { font-size: 12px; font-weight: 500; color: var(--gray2); text-align: center; margin-bottom: 12px; }
+  .sheet-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 8px; border-radius: 14px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .sheet-item:active { background: rgba(255,255,255,0.06); }
+  .sheet-icon {
+    width: 44px; height: 44px; background: var(--card);
+    border-radius: 14px; display: flex; align-items: center;
+    justify-content: center; font-size: 20px; flex-shrink: 0;
+  }
+  .sheet-item-label { font-size: 15px; font-weight: 600; color: var(--white); }
+  .sheet-item-sub { font-size: 11px; color: var(--gray2); margin-top: 1px; }
+  .sheet-cancel {
+    margin-top: 8px; width: 100%;
+    background: var(--card); border: none;
+    border-radius: 14px; padding: 15px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 600; color: var(--gray2); cursor: pointer;
+  }
+
+  /* ── 설정 패널 ── */
+  .panel {
+    display: none; position: fixed; inset: 0;
+    background: var(--bg); z-index: 200;
+    flex-direction: column;
+  }
+  .panel.open { display: flex; animation: slideRight 0.26s cubic-bezier(0.32,0.72,0,1); }
+  @keyframes slideRight {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+  }
+  .panel-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 20px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    flex-shrink: 0;
+  }
+  .back-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--card); display: flex;
+    align-items: center; justify-content: center; cursor: pointer;
+  }
+  .back-btn svg { width: 18px; height: 18px; stroke: var(--white); fill: none; stroke-width: 2; stroke-linecap: round; }
+  .panel-title { font-size: 18px; font-weight: 800; color: var(--white); }
+  .panel-scroll { flex: 1; overflow-y: auto; padding: 0 16px 40px; }
+  .panel-scroll::-webkit-scrollbar { display: none; }
+
+  .section-label {
+    font-size: 11px; font-weight: 600; color: var(--gray1);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin: 20px 4px 8px;
+  }
+  .settings-card { background: var(--card); border-radius: 18px; overflow: hidden; margin-bottom: 10px; }
+  .settings-row {
+    display: flex; align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .row-label { font-size: 14px; font-weight: 500; color: var(--white); flex: 1; }
+  .row-sub { font-size: 11px; color: var(--gray2); margin-top: 2px; }
+
+  .s-input {
+    background: transparent; border: none; outline: none;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 700;
+    color: var(--green); text-align: right; width: 120px;
+  }
+  .s-input::placeholder { color: var(--gray1); }
+  .s-select {
+    background: transparent; border: none; outline: none;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 14px; font-weight: 700;
+    color: var(--green); text-align: right; cursor: pointer;
+    -webkit-appearance: none;
+  }
+
+  .api-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px;
+  }
+  .api-badge.ok      { background: rgba(0,251,92,0.12);  color: var(--green); }
+  .api-badge.err     { background: rgba(255,59,73,0.12);  color: var(--red); }
+  .api-badge.pending { background: rgba(143,145,156,0.15); color: var(--gray2); }
+
+  .s-textarea {
+    width: 100%; background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border); border-radius: 12px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 13px; color: var(--white);
+    padding: 12px 14px; outline: none; resize: none; line-height: 1.5;
+  }
+  .s-textarea::placeholder { color: var(--gray1); }
+
+  .primary-btn {
+    width: 100%; padding: 15px;
+    background: var(--green); color: #000;
+    border: none; border-radius: 14px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 800;
+    cursor: pointer; margin-top: 12px;
+  }
+  .primary-btn:active { opacity: 0.85; }
+  .secondary-btn {
+    width: 100%; padding: 14px;
+    background: var(--card); color: var(--gray3);
+    border: none; border-radius: 14px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; margin-top: 8px;
+  }
+
+  /* ── 파싱 모달 ── */
+  .parse-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8); z-index: 300;
+    align-items: flex-end; justify-content: center;
+  }
+  .parse-overlay.open { display: flex; }
+  .parse-sheet {
+    width: 100%; max-width: 480px;
+    background: #1C1C28;
+    border-radius: 24px 24px 0 0;
+    padding: 20px 20px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    animation: slideUp 0.26s cubic-bezier(0.32,0.72,0,1);
+  }
+  .parse-handle {
+    width: 36px; height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px; margin: 0 auto 20px;
+  }
+  .parse-title { font-size: 18px; font-weight: 800; color: var(--white); margin-bottom: 6px; }
+  .parse-sub { font-size: 13px; color: var(--gray2); margin-bottom: 20px; line-height: 1.5; }
+
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+  .result-item { background: var(--card); border-radius: 14px; padding: 12px 14px; }
+  .result-label { font-size: 10px; color: var(--gray2); margin-bottom: 4px; }
+  .result-val { font-size: 22px; font-weight: 800; color: var(--white); letter-spacing: -0.02em; }
+  .result-val.acc { color: var(--green); }
+  .result-unit { font-size: 12px; color: var(--gray2); margin-left: 2px; }
+
+  .spinner-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 0; }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(0,251,92,0.2);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner-text { font-size: 14px; color: var(--gray2); }
+
+  .error-box {
+    background: rgba(255,59,73,0.08);
+    border: 1px solid rgba(255,59,73,0.2);
+    border-radius: 12px; padding: 14px;
+    font-size: 13px; color: var(--red);
+    line-height: 1.6; margin-bottom: 16px;
+  }
+
+  /* ── 수동입력 필드 ── */
+  .manual-row {
+    background: var(--card); border-radius: 14px;
+    padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .manual-row-label { font-size: 14px; color: var(--white); }
+  .manual-input-wrap { display: flex; align-items: center; gap: 6px; }
+  .manual-input {
+    background: transparent; border: none; outline: none;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 20px; font-weight: 800; color: var(--green);
+    width: 72px; text-align: right;
+  }
+  .manual-unit { font-size: 13px; color: var(--gray2); }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ══════ 홈 ══════ -->
+  <div class="screen active" id="screen-home">
+    <div class="header">
+      <div class="logo">FATCUT</div>
+      <div class="header-actions">
+        <div class="icon-btn" onclick="openSettings()">
+          <svg viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div class="icon-btn" onclick="openUpload()">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="scroll" id="home-content">
+      <!-- JS 렌더링 -->
+    </div>
+  </div>
+
+  <!-- ══════ 프로토콜 ══════ -->
+  <div class="screen" id="screen-protocol">
+    <div class="screen-header">
+      <div class="screen-title">프로토콜</div>
+      <div class="screen-sub">내 체성분에 맞춘 린매스업 전략</div>
+    </div>
+    <div class="scroll" id="protocol-content">
+      <!-- JS 렌더링 -->
+    </div>
+  </div>
+
+  <!-- ══════ 히스토리 ══════ -->
+  <div class="screen" id="screen-history">
+    <div class="screen-header">
+      <div class="screen-title">히스토리</div>
+      <div class="screen-sub">체성분 측정 기록</div>
+    </div>
+    <div class="scroll" id="history-content">
+      <!-- JS 렌더링 -->
+    </div>
+  </div>
+
+  <!-- ══════ 탭바 ══════ -->
+  <div class="tabbar">
+    <div class="tab-item active" id="tab-home" onclick="switchTab('home')">
+      <svg viewBox="0 0 24 24"><path d="M15.6 2.7a10 10 0 1 0 5.7 5.7"/><circle cx="12" cy="12" r="2"/><path d="M13.4 10.6 19 5"/></svg>
+      <span class="tab-label">홈</span>
+    </div>
+    <div class="tab-item" id="tab-protocol" onclick="switchTab('protocol')">
+      <svg viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
+      <span class="tab-label">프로토콜</span>
+    </div>
+    <div class="tab-item" id="tab-history" onclick="switchTab('history')">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+      <span class="tab-label">히스토리</span>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ══════ 업로드 시트 ══════ -->
+<div class="overlay" id="upload-overlay" onclick="overlayClose('upload-overlay')">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">인바디 측정 결과 추가</div>
+    <div class="sheet-item" onclick="triggerCamera()">
+      <div class="sheet-icon">📷</div>
+      <div>
+        <div class="sheet-item-label">카메라로 촬영</div>
+        <div class="sheet-item-sub">인바디 화면을 직접 촬영해요</div>
+      </div>
+    </div>
+    <div class="sheet-item" onclick="triggerGallery()">
+      <div class="sheet-icon">🖼️</div>
+      <div>
+        <div class="sheet-item-label">갤러리에서 선택</div>
+        <div class="sheet-item-sub">저장된 스크린샷을 불러와요</div>
+      </div>
+    </div>
+    <div class="sheet-item" onclick="openManual()">
+      <div class="sheet-icon">✏️</div>
+      <div>
+        <div class="sheet-item-label">직접 입력</div>
+        <div class="sheet-item-sub">수치를 직접 타이핑해요</div>
+      </div>
+    </div>
+    <button class="sheet-cancel" onclick="overlayClose('upload-overlay')">취소</button>
+  </div>
+</div>
+
+<!-- 파일 inputs -->
+<input type="file" id="gallery-input" accept="image/*" style="display:none">
+<input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+
+<!-- ══════ 설정 패널 ══════ -->
+<div class="panel" id="settings-panel">
+  <div class="panel-header">
+    <div class="back-btn" onclick="closeSettings()">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    </div>
+    <div class="panel-title">설정</div>
+  </div>
+  <div class="panel-scroll">
+
+    <div class="section-label">Claude API</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div style="flex:1">
+          <div class="row-label">API Key</div>
+          <div class="row-sub">인바디 이미지 자동 파싱에 사용</div>
+        </div>
+        <span class="api-badge pending" id="api-badge">미확인</span>
+      </div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+        <input class="s-input" id="api-key-input" type="password"
+          placeholder="sk-ant-api03-..."
+          style="width:100%;text-align:left;font-size:13px;font-weight:500"
+          oninput="setBadge('pending','미확인')">
+      </div>
+      <div style="padding:12px 16px">
+        <button class="primary-btn" style="margin-top:0" onclick="testApi()">연결 테스트</button>
+      </div>
+    </div>
+
+    <div class="section-label">프록시 설정 (모바일 필수)</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div style="flex:1">
+          <div class="row-label">Cloudflare Worker URL</div>
+          <div class="row-sub">모바일에서 API 연결 시 필요해요</div>
+        </div>
+      </div>
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+        <input class="s-input" id="proxy-url-input" type="url"
+          placeholder="https://fatcut-proxy.your-id.workers.dev"
+          style="width:100%;text-align:left;font-size:13px;font-weight:500">
+      </div>
+      <div style="padding:12px 16px 14px">
+        <div style="font-size:11px;color:var(--gray2);line-height:1.6;margin-bottom:10px">
+          아래 코드를 Cloudflare Workers에 배포 후 URL을 입력하세요.<br>
+          <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--green)">workers.cloudflare.com</a> → 무료로 시작
+        </div>
+        <div style="background:#0d0d0d;border-radius:10px;padding:12px;font-family:monospace;font-size:11px;color:#8f919c;line-height:1.7;word-break:break-all">
+          export default {<br>
+          &nbsp;&nbsp;async fetch(req) {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;if (req.method === 'OPTIONS') {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return new Response(null, { headers: {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'Access-Control-Allow-Origin': '*',<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'Access-Control-Allow-Headers': '*',<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}});<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;const url = new URL(req.url);<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;const target = 'https://api.anthropic.com' + url.pathname + url.search;<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;const headers = new Headers(req.headers);<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;headers.delete('host');<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;const res = await fetch(target, { method: req.method, headers, body: req.method !== 'GET' ? req.body : undefined });<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;const newHeaders = new Headers(res.headers);<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;newHeaders.set('Access-Control-Allow-Origin', '*');<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;return new Response(res.body, { status: res.status, headers: newHeaders });<br>
+          &nbsp;&nbsp;}<br>
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">내 정보</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div class="row-label">시작 체지방률</div>
+        <input class="s-input" id="cfg-start-fat" type="number" value="30.0" step="0.1">
+        <span style="font-size:13px;color:var(--gray2);margin-left:4px">%</span>
+      </div>
+      <div class="settings-row">
+        <div class="row-label">목표 체지방률</div>
+        <input class="s-input" id="cfg-goal-fat" type="number" value="18.0" step="0.1">
+        <span style="font-size:13px;color:var(--gray2);margin-left:4px">%</span>
+      </div>
+      <div class="settings-row">
+        <div class="row-label">마운자로 월 비용</div>
+        <input class="s-input" id="cfg-mounjaro" type="number" value="340000" step="10000">
+        <span style="font-size:13px;color:var(--gray2);margin-left:4px">원</span>
+      </div>
+      <div class="settings-row">
+        <div class="row-label">감량 페이스</div>
+        <select class="s-select" id="cfg-pace">
+          <option value="0.3">0.3kg/주</option>
+          <option value="0.5" selected>0.5kg/주</option>
+          <option value="0.7">0.7kg/주</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-label">AI 파싱 설정</div>
+    <div class="settings-card">
+      <div style="padding:14px 16px">
+        <div class="row-label" style="margin-bottom:4px">파싱 추가 지침</div>
+        <div class="row-sub" style="margin-bottom:10px">기기 모델 등 추가 정보를 입력하면 파싱 정확도가 올라가요</div>
+        <textarea class="s-textarea" id="cfg-prompt" rows="4"
+          placeholder="예: InBody 270 기기를 사용합니다. 측정 단위는 kg입니다."></textarea>
+      </div>
+    </div>
+
+    <div class="section-label">기기 정보</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div style="flex:1">
+          <div class="row-label">기기 ID</div>
+          <div class="row-sub" id="device-id-display" style="font-family:monospace;font-size:10px;word-break:break-all;margin-top:4px;color:var(--green)">로딩중...</div>
+        </div>
+        <button onclick="copyDeviceId()" style="background:var(--card2);border:none;border-radius:10px;padding:8px 12px;font-family:'Pretendard',sans-serif;font-size:12px;color:var(--gray3);cursor:pointer;flex-shrink:0;margin-left:8px">복사</button>
+      </div>
+      <div style="padding:0 16px 14px">
+        <div class="row-sub">새 기기에서 같은 ID 입력 시 데이터 복원</div>
+        <input class="s-input" id="device-id-input" type="text"
+          placeholder="다른 기기 ID 입력 (데이터 이전용)"
+          style="width:100%;text-align:left;font-size:12px;font-weight:500;margin-top:8px;color:var(--white)">
+        <button onclick="changeDeviceId()" style="width:100%;background:var(--card2);border:none;border-radius:10px;padding:10px;font-family:'Pretendard',sans-serif;font-size:13px;color:var(--gray2);cursor:pointer;margin-top:6px">이 ID로 데이터 불러오기</button>
+      </div>
+    </div>
+
+    <button class="primary-btn" onclick="saveSettings()">저장</button>
+
+  </div>
+</div>
+
+<!-- ══════ 파싱 모달 ══════ -->
+<div class="parse-overlay" id="parse-overlay">
+  <div class="parse-sheet">
+    <div class="parse-handle"></div>
+    <div id="parse-body">
+      <!-- JS 렌더링 -->
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════
+//  STATE
+// ═══════════════════════════════
+const S = {
+  weight: 0, muscle: 0, fatPct: 0,
+  startFatPct: 30, startWeight: 80,
+  goalFatPct: 18,
+  mounjaro: 340000,
+  pace: 0.5,
+  history: [],
+  apiKey: '',
+  proxyUrl: '',
+  reports: [], // {date, text, type: 'good'|'warning'|'baseline'}
+  reportLoading: false,
+  deviceId: '',    // 기기 고유 ID (로그인 없이 사용자 식별)
+  syncing: false,  // Supabase 동기화 중 여부 // Cloudflare Worker URL (모바일 CORS 우회)
+};
+
+const EFFECTS = [
+  {
+    kg: 1,
+    headline: '수면 효율',
+    accent: '+12% 증가',
+    bullets: ['수면 질 즉각 개선 — 렙틴/그렐린 균형 회복', '아침 기상 피로도 감소, 에너지 안정', '혈당 스파이크 완화 (내장지방 감소 시작)'],
+  },
+  {
+    kg: 3,
+    headline: '유의미한',
+    accent: '테스토스테론 수치 상승',
+    bullets: ['지방이 에스트로겐 전환되는걸 억제', '리비도, 컨디션, 운동 퍼포먼스 개선', '인슐린 감수성 회복, 탄수화물 처리 개선'],
+  },
+  {
+    kg: 5,
+    headline: '무릎·허리',
+    accent: '관절 통증 감소',
+    bullets: ['관절 부하 5~7kg 경감', '혈압 정상화 시작', '인지력·집중력 개선, 뇌 혈류 증가'],
+  },
+  {
+    kg: 8,
+    headline: '뇌 혈류·인지력',
+    accent: '눈에 띄게 개선',
+    bullets: ['기억력·집중력 표준 검사에서 유의미하게 향상', '혈압 안정화, 심혈관 리스크 감소', '생산성·기분 지속적으로 개선'],
+  },
+];
+
+// ═══════════════════════════════
+//  렌더링
+// ═══════════════════════════════
+function render() {
+  renderHome();
+  renderProtocol();
+  renderHistory();
+}
+
+function hasData() { return S.history.length > 0; }
+
+function renderHome() {
+  const el = document.getElementById('home-content');
+  if (!hasData()) {
+    el.innerHTML = emptyStateHTML('📊', '첫 번째 인바디를 업로드해요',
+      '인바디 스크린샷 한 장이면\n체지방 감량 효과와\n마운자로 절약 금액을 바로 계산해드려요.',
+      'openUpload()');
+    return;
+  }
+
+  const curFatKg   = S.weight * S.fatPct / 100;
+  const startFatKg = S.startWeight * S.startFatPct / 100;
+  const lostKg     = Math.max(0, startFatKg - curFatKg);
+  const lossPct    = Math.max(0, S.startFatPct - S.fatPct).toFixed(1);
+  const wks        = lostKg / S.pace;
+  const saved      = Math.round(wks * (S.mounjaro / 4.33));
+  const goalFatKg  = S.weight * S.goalFatPct / 100;
+  const remainKg   = Math.max(0, curFatKg - goalFatKg);
+  const wksLeft    = remainKg / S.pace;
+  const future     = Math.round(wksLeft * (S.mounjaro / 4.33));
+
+  // 이번 측정에서 번 돈 (직전 측정 대비 체지방 감소분)
+  const latestDelta  = S.history.length >= 2
+    ? (S.history[1].weight * S.history[1].fatPct / 100) - curFatKg
+    : 0;
+  const thisWeekSaved = latestDelta > 0
+    ? Math.round((latestDelta / S.pace) * (S.mounjaro / 4.33))
+    : 0;
+
+  // 리포트 섹션 (최신 1개)
+  let reportHtml = '';
+  if (S.reports.length > 0) {
+    const r = S.reports[0];
+    const tagClass = r.type === 'warning' ? 'warn' : '';
+    const tagText = r.type === 'warning' ? '⚠️ 주의' : r.type === 'baseline' ? '📊 베이스라인' : '✅ 분석';
+    const cardClass = r.type === 'warning' ? 'warning' : '';
+    reportHtml = `
+      <div class="report-card ${cardClass}">
+        <div class="report-header">
+          <span class="report-tag ${tagClass}">${tagText}</span>
+          <span class="report-date">${r.date}</span>
+        </div>
+        <div class="report-body">${r.text}</div>
+      </div>`;
+  } else if (S.history.length > 0 && S.reportLoading) {
+    reportHtml = `
+      <div class="report-card">
+        <div class="report-header">
+          <span class="report-tag">AI 분석</span>
+        </div>
+        <div class="report-loading">
+          <div class="report-spinner"></div>
+          <span>AI가 체성분을 분석하고 있어요...</span>
+        </div>
+      </div>`;
+  }
+
+  let html = reportHtml + `
+    <div class="stat-card">
+      <div class="stat-item">
+        <div class="stat-label">체중</div>
+        <div class="stat-num">${S.weight}<span class="stat-unit-sm">kg</span></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">골격근량</div>
+        <div class="stat-num">${S.muscle}<span class="stat-unit-sm">kg</span></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">체지방률</div>
+        <div class="stat-num">${S.fatPct}<span class="stat-unit-sm">%</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">다이어트 시작일로부터</div>
+      <div style="display:flex;align-items:baseline;gap:4px">
+        <span class="card-value">${lossPct}</span>
+        <span style="font-size:18px;font-weight:800;color:var(--green)">% 감량</span>
+      </div>
+    </div>
+    ${thisWeekSaved > 0 ? `
+    <div class="card" style="border:1px solid rgba(0,251,92,0.25)">
+      <div class="card-label">이번 측정에서 번 돈 💸</div>
+      <div style="display:flex;align-items:baseline;gap:2px">
+        <span class="card-value">+${thisWeekSaved.toLocaleString('ko-KR')}</span>
+        <span class="card-unit">원</span>
+      </div>
+      <div style="font-size:11px;color:var(--gray2);margin-top:6px">체지방 ${latestDelta.toFixed(1)}kg 감량 → 마운자로 ${Math.round(latestDelta/S.pace)}회분 절약</div>
+    </div>` : ''}
+    <div class="card">
+      <div class="card-label">지금까지 아낀 금액 💰</div>
+      <div style="display:flex;align-items:baseline;gap:2px">
+        <span class="card-value">${saved.toLocaleString('ko-KR')}</span>
+        <span class="card-unit">원</span>
+      </div>
+      <div style="font-size:11px;color:var(--gray2);margin-top:6px">시작 이후 ${lostKg.toFixed(1)}kg 체지방 감량 기준</div>
+    </div>
+    <div class="card">
+      <div class="card-label">지금 마운자로 맞으면 드는 돈 🎯</div>
+      <div style="display:flex;align-items:baseline;gap:2px">
+        <span class="card-value" style="color:var(--red)">${future.toLocaleString('ko-KR')}</span>
+        <span class="card-unit" style="color:var(--red)">원</span>
+      </div>
+      <div style="font-size:11px;color:var(--gray2);margin-top:6px">체지방 ${remainKg.toFixed(1)}kg 남음 · 약 ${Math.ceil(wksLeft)}주 예상</div>
+    </div>`;
+
+  EFFECTS.forEach(e => {
+    const achieved = lostKg >= e.kg;
+    const need = achieved ? 0 : (e.kg - lostKg).toFixed(1);
+    const trigger = achieved ? `✓ ${e.kg}kg 감량 달성` : `${need}kg 더 빠지면`;
+    html += `
+      <div class="effect-card${achieved ? ' achieved' : ''}">
+        ${achieved ? '<div class="effect-badge">달성</div>' : ''}
+        <div class="effect-trigger">${trigger}</div>
+        <div class="effect-headline">${e.headline} <span class="acc">${e.accent}</span></div>
+        <div class="effect-bullets">
+          ${e.bullets.map(b => `<div class="effect-bullet"><div class="bdot"></div><span>${b}</span></div>`).join('')}
+        </div>
+      </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function renderProtocol() {
+  const el = document.getElementById('protocol-content');
+  if (!hasData()) {
+    el.innerHTML = emptyStateHTML('⚡', '체성분 데이터가 필요해요',
+      '인바디를 업로드하면\n내 체중·골격근량 기반의\n맞춤 프로토콜을 계산해드려요.',
+      "switchTab('home');setTimeout(openUpload,200)");
+    return;
+  }
+  const protein     = Math.round(S.weight * 2.0);
+  const bmr         = Math.round(10 * S.weight + 6.25 * 170 - 5 * 30 + 5);
+  const targetKcal  = Math.round(bmr * 1.4 - 400);
+  el.innerHTML = `
+    <div class="protocol-card">
+      <div class="protocol-name">단백질 목표</div>
+      <div><span class="protocol-big">${protein}</span><span style="font-size:24px;font-weight:800;color:var(--green)">g</span><span class="protocol-unit2">/ 일</span></div>
+      <div class="protocol-desc">체중 ${S.weight}kg × 2.0g = ${protein}g<br>근손실 방지를 위해 <span class="hl">매끼 ${Math.round(protein/4)}g 이상</span> 분배해주세요.</div>
+    </div>
+    <div class="protocol-card">
+      <div class="protocol-name">칼로리 적자</div>
+      <div><span class="protocol-big">-400</span><span class="protocol-unit2">kcal / 일</span></div>
+      <div class="protocol-desc">하루 목표 칼로리 <span class="hl">${targetKcal.toLocaleString()}kcal</span><br><span class="hl">300~500kcal 적자</span>가 근육 보존에 유리합니다.</div>
+    </div>
+    <div class="protocol-card">
+      <div class="protocol-name">웨이트 + HIIT</div>
+      <div><span class="protocol-big">4</span><span class="protocol-unit2">회 / 주</span></div>
+      <div class="protocol-desc">저항운동 3-4회, HIIT 1-2회<br>풀바디 루틴이 분할 운동보다 체지방 감량에 유리합니다.</div>
+    </div>`;
+}
+
+function renderHistory() {
+  const el = document.getElementById('history-content');
+  if (S.history.length === 0) {
+    el.innerHTML = emptyStateHTML('🕐', '아직 기록이 없어요',
+      '인바디를 업로드하면\n날짜별 체성분 변화를\n여기서 확인할 수 있어요.',
+      "switchTab('home');setTimeout(openUpload,200)");
+    return;
+  }
+  el.innerHTML = S.history.map(h => {
+    const dc = h.delta <= 0 ? 'good' : 'bad';
+    const ds = h.delta > 0 ? `+${h.delta}%` : `${h.delta}%`;
+    return `
+      <div class="history-card">
+        <div class="history-hdr">
+          <span class="history-date">${h.date}</span>
+          <span class="history-delta ${dc}">${ds}</span>
+        </div>
+        <div class="history-stats">
+          <div class="h-stat"><div class="h-label">체중</div><div class="h-val">${h.weight}<span class="h-unit">kg</span></div></div>
+          <div class="h-stat"><div class="h-label">골격근량</div><div class="h-val">${h.muscle}<span class="h-unit">kg</span></div></div>
+          <div class="h-stat"><div class="h-label">체지방률</div><div class="h-val">${h.fatPct}<span class="h-unit">%</span></div></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function emptyStateHTML(icon, title, sub, action) {
+  return `
+    <div class="empty-state">
+      <div class="empty-icon">${icon}</div>
+      <div class="empty-title">${title}</div>
+      <div class="empty-sub">${sub.replace(/\n/g,'<br>')}</div>
+      <button class="empty-btn" onclick="${action}">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        인바디 업로드하기
+      </button>
+    </div>`;
+}
+
+// ═══════════════════════════════
+//  탭 전환
+// ═══════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ═══════════════════════════════
+//  업로드 플로우
+// ═══════════════════════════════
+function openUpload()  { document.getElementById('upload-overlay').classList.add('open'); }
+function closeUpload() { document.getElementById('upload-overlay').classList.remove('open'); }
+function overlayClose(id) { document.getElementById(id).classList.remove('open'); }
+
+function triggerCamera()  { closeUpload(); document.getElementById('camera-input').click(); }
+function triggerGallery() { closeUpload(); document.getElementById('gallery-input').click(); }
+function openManual()     { closeUpload(); showManual(); }
+
+document.getElementById('gallery-input').addEventListener('change', e => {
+  if (e.target.files[0]) parseImage(e.target.files[0]);
+  e.target.value = '';
+});
+document.getElementById('camera-input').addEventListener('change', e => {
+  if (e.target.files[0]) parseImage(e.target.files[0]);
+  e.target.value = '';
+});
+
+// ═══════════════════════════════
+//  Claude API 파싱
+//  ※ 브라우저에서 직접 호출 시
+//     anthropic-dangerous-direct-browser-access: true 헤더 필요
+// ═══════════════════════════════
+async function parseImage(file) {
+  const overlay = document.getElementById('parse-overlay');
+  const body    = document.getElementById('parse-body');
+  overlay.classList.add('open');
+
+  body.innerHTML = `
+    <div class="parse-title">AI 분석 중</div>
+    <div class="parse-sub">Claude가 인바디 수치를 읽고 있어요</div>
+    <div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">이미지 분석 중...</div></div>`;
+
+  const key = S.apiKey || localStorage.getItem('fatcut_key') || '';
+  if (!key) {
+    body.innerHTML = `
+      <div class="parse-title">API Key 없음</div>
+      <div class="error-box">설정에서 Claude API Key를 먼저 입력해주세요.</div>
+      <button class="primary-btn" onclick="closeParse();openSettings()">설정 열기</button>
+      <button class="secondary-btn" onclick="closeParse()">닫기</button>`;
+    return;
+  }
+
+  try {
+    const b64 = await toBase64(file);
+    const mime = file.type || 'image/jpeg';
+    const extra = document.getElementById('cfg-prompt')?.value || '';
+
+    const system = `당신은 인바디(InBody) 체성분 분석 결과를 읽는 전문가입니다.
+이미지에서 다음 수치를 정확하게 추출하세요:
+weight(체중 kg), muscle(골격근량 kg), fatPct(체지방률 %), fatKg(체지방량 kg), visceralFat(내장지방레벨 정수), bmr(기초대사량 kcal 정수)
+반드시 JSON만 응답하세요. 예: {"weight":78.1,"muscle":32.2,"fatPct":27.3,"fatKg":21.4,"visceralFat":7,"bmr":1680}
+찾을 수 없는 값은 null로 표시하세요.${extra ? '\n추가 정보: ' + extra : ''}`;
+
+    const proxy = S.proxyUrl || localStorage.getItem('fatcut_proxy') || '';
+    const endpoint = proxy
+      ? proxy.replace(/\/$/, '') + '/v1/messages'
+      : 'https://api.anthropic.com/v1/messages';
+    const headers = proxy
+      ? { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+      : { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+            { type: 'text', text: '이 인바디 이미지의 수치를 JSON으로 추출해주세요.' }
+          ]
+        }]
+      })
+    });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e?.error?.message || `API 오류 (${res.status})`);
+    }
+
+    const data   = await res.json();
+    const text   = data.content?.[0]?.text || '';
+    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+    showParseResult(parsed);
+
+  } catch (err) {
+    body.innerHTML = `
+      <div class="parse-title">파싱 실패</div>
+      <div class="error-box">${err.message || '이미지를 읽지 못했어요. 더 선명한 사진으로 다시 시도해보세요.'}</div>
+      <button class="primary-btn" onclick="closeParse()">닫기</button>`;
+  }
+}
+
+function showParseResult(p) {
+  document.getElementById('parse-body').innerHTML = `
+    <div class="parse-title">수치 추출 완료 ✓</div>
+    <div class="parse-sub">확인 후 저장해주세요</div>
+    <div class="result-grid">
+      ${[
+        {l:'체중',     v:p.weight,      u:'kg',   a:false},
+        {l:'체지방률',  v:p.fatPct,      u:'%',    a:true },
+        {l:'골격근량',  v:p.muscle,      u:'kg',   a:false},
+        {l:'내장지방',  v:p.visceralFat, u:'레벨', a:false},
+      ].map(i=>`
+        <div class="result-item">
+          <div class="result-label">${i.l}</div>
+          <div class="result-val${i.a?' acc':''}">${i.v??'—'}<span class="result-unit">${i.v!=null?i.u:''}</span></div>
+        </div>`).join('')}
+    </div>
+    <button class="primary-btn" onclick='applyData(${JSON.stringify(p)})'>확인 · 저장</button>
+    <button class="secondary-btn" onclick="closeParse()">취소</button>`;
+}
+
+function applyData(p) {
+  if (p.weight  != null) S.weight  = p.weight;
+  if (p.muscle  != null) S.muscle  = p.muscle;
+  if (p.fatPct  != null) S.fatPct  = p.fatPct;
+  if (S.history.length === 0 && p.weight) S.startWeight = p.weight;
+
+  const now  = new Date();
+  const date = `${now.getMonth()+1}/${now.getDate()}`;
+  const prev = S.history[0]?.fatPct ?? p.fatPct;
+  const delta = parseFloat(((p.fatPct ?? 0) - prev).toFixed(1));
+  S.history.unshift({ date, weight: p.weight??S.weight, muscle: p.muscle??S.muscle, fatPct: p.fatPct??S.fatPct, delta });
+
+  // deviceId 확실히 초기화
+  if (!S.deviceId) S.deviceId = getDeviceId();
+
+  saveData();
+  closeParse();
+  render();
+
+  // Supabase에 측정 기록 저장 후 리포트 생성
+  (async () => {
+    const inserted = await saveMeasurementToSupabase({
+      weight:      p.weight      ?? S.weight,
+      muscle:      p.muscle      ?? S.muscle,
+      fatPct:      p.fatPct      ?? S.fatPct,
+      visceralFat: p.visceralFat ?? null,
+      bmr:         p.bmr         ?? null,
+    }, null, null);
+    S._lastMeasurementId = inserted?.id || null;
+    generateReport();
+  })();
+}
+
+function closeParse() { document.getElementById('parse-overlay').classList.remove('open'); }
+
+// ═══════════════════════════════
+//  수동 입력
+// ═══════════════════════════════
+function showManual() {
+  const body = document.getElementById('parse-body');
+  document.getElementById('parse-overlay').classList.add('open');
+  body.innerHTML = `
+    <div class="parse-title">수동 입력</div>
+    <div class="parse-sub">인바디 수치를 직접 입력해주세요</div>
+    ${[
+      {id:'mi-w', label:'체중',     unit:'kg', val: S.weight||78},
+      {id:'mi-m', label:'골격근량', unit:'kg', val: S.muscle||32},
+      {id:'mi-f', label:'체지방률', unit:'%',  val: S.fatPct||27},
+    ].map(r=>`
+      <div class="manual-row">
+        <span class="manual-row-label">${r.label}</span>
+        <div class="manual-input-wrap">
+          <input id="${r.id}" type="number" class="manual-input" value="${r.val}" step="0.1">
+          <span class="manual-unit">${r.unit}</span>
+        </div>
+      </div>`).join('')}
+    <button class="primary-btn" style="margin-top:12px" onclick="applyManual()">저장</button>
+    <button class="secondary-btn" onclick="closeParse()">취소</button>`;
+}
+
+function applyManual() {
+  applyData({
+    weight: parseFloat(document.getElementById('mi-w').value),
+    muscle: parseFloat(document.getElementById('mi-m').value),
+    fatPct: parseFloat(document.getElementById('mi-f').value),
+    visceralFat: null,
+  });
+}
+
+// ═══════════════════════════════
+//  설정
+// ═══════════════════════════════
+function openSettings() {
+  const k = localStorage.getItem('fatcut_key') || '';
+  document.getElementById('api-key-input').value = k;
+  if (k) setBadge('ok','연결됨');
+  const p = localStorage.getItem('fatcut_proxy') || '';
+  document.getElementById('proxy-url-input').value = p;
+  document.getElementById('settings-panel').classList.add('open');
+  // 기기 ID 표시
+  const dId = S.deviceId || getDeviceId();
+  const dEl = document.getElementById('device-id-display');
+  if (dEl) dEl.textContent = dId;
+}
+function closeSettings() { document.getElementById('settings-panel').classList.remove('open'); }
+
+function saveSettings() {
+  const k = document.getElementById('api-key-input').value.trim();
+  if (k) { S.apiKey = k; localStorage.setItem('fatcut_key', k); }
+  const p = document.getElementById('proxy-url-input').value.trim();
+  S.proxyUrl = p; if (p) localStorage.setItem('fatcut_proxy', p); else localStorage.removeItem('fatcut_proxy');
+  S.startFatPct = parseFloat(document.getElementById('cfg-start-fat').value) || 30;
+  S.goalFatPct  = parseFloat(document.getElementById('cfg-goal-fat').value) || 18;
+  S.mounjaro    = parseFloat(document.getElementById('cfg-mounjaro').value) || 340000;
+  S.pace        = parseFloat(document.getElementById('cfg-pace').value) || 0.5;
+  saveData();
+  saveUserToSupabase(); // Supabase에도 동기화
+  closeSettings();
+  render();
+}
+
+function setBadge(cls, text) {
+  const el = document.getElementById('api-badge');
+  el.className = `api-badge ${cls}`;
+  el.textContent = text;
+}
+
+async function testApi() {
+  const k = document.getElementById('api-key-input').value.trim();
+  if (!k) { setBadge('err','Key 없음'); return; }
+  setBadge('pending','확인중...');
+  try {
+    const proxy = S.proxyUrl || localStorage.getItem('fatcut_proxy') || '';
+    const ep = proxy ? proxy.replace(/\/$/, '') + '/v1/messages' : 'https://api.anthropic.com/v1/messages';
+    const hdrs = proxy
+      ? { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01' }
+      : { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+    const r = await fetch(ep, {
+      method: 'POST',
+      headers: hdrs,
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:10, messages:[{role:'user',content:'hi'}] })
+    });
+    if (r.ok) {
+      S.apiKey = k;
+      localStorage.setItem('fatcut_key', k);
+      setBadge('ok','연결됨');
+    } else {
+      const errBody = await r.json().catch(() => ({}));
+      console.warn('API 테스트 실패:', r.status, errBody?.error?.message || errBody);
+      setBadge('err', r.status === 401 ? '인증오류' : r.status === 403 ? '권한오류' : `오류(${r.status})`);
+    }
+  } catch { setBadge('err','오류'); }
+}
+
+
+// ═══════════════════════════════
+//  AI 리포트 생성
+// ═══════════════════════════════
+async function generateReport() {
+  const key = S.apiKey || localStorage.getItem('fatcut_key') || '';
+  if (!key || S.history.length === 0) return;
+
+  S.reportLoading = true;
+  renderHome();
+
+  const cur  = S.history[0];
+  const prev = S.history[1] || null;
+
+  // 맥락 데이터 구성
+  const curFatKg  = +(cur.weight * cur.fatPct / 100).toFixed(1);
+  const goalFatKg = +(S.weight   * S.goalFatPct / 100).toFixed(1);
+  const remainKg  = Math.max(0, curFatKg - goalFatKg).toFixed(1);
+
+  let context = '';
+  let mode    = 'baseline';
+
+  if (!prev) {
+    // 첫 측정 — 베이스라인 분석
+    context = `
+사용자의 첫 번째 인바디 측정 결과입니다.
+- 체중: ${cur.weight}kg
+- 골격근량: ${cur.muscle}kg
+- 체지방률: ${cur.fatPct}%
+- 체지방량: ${curFatKg}kg
+- 목표 체지방률: ${S.goalFatPct}%
+- 목표까지 남은 체지방: ${remainKg}kg`;
+    mode = 'baseline';
+  } else {
+    const fatDiff    = +(cur.fatPct - prev.fatPct).toFixed(2);
+    const muscleDiff = +(cur.muscle - prev.muscle).toFixed(2);
+    const fatKgDiff  = +(curFatKg - (prev.weight * prev.fatPct / 100)).toFixed(2);
+    mode = fatDiff > 0.1 ? 'warning' : 'good';
+
+    // 전체 트렌드 (최근 4개)
+    const trendStr = S.history.slice(0, 4).map((h, i) =>
+      `${h.date}: 체지방 ${h.fatPct}% / 골격근 ${h.muscle}kg`
+    ).join('\n');
+
+    context = `
+이전 측정 대비 변화입니다.
+이전: 체중 ${prev.weight}kg | 골격근 ${prev.muscle}kg | 체지방률 ${prev.fatPct}%
+현재: 체중 ${cur.weight}kg  | 골격근 ${cur.muscle}kg  | 체지방률 ${cur.fatPct}%
+변화: 체지방률 ${fatDiff > 0 ? '+' : ''}${fatDiff}% | 골격근 ${muscleDiff > 0 ? '+' : ''}${muscleDiff}kg | 체지방량 ${fatKgDiff > 0 ? '+' : ''}${fatKgDiff}kg
+목표 체지방률: ${S.goalFatPct}% (남은 체지방 ${remainKg}kg / 약 ${Math.ceil(remainKg/S.pace)}주)
+방향: ${mode === 'warning' ? '체지방 증가 또는 정체' : '체지방 감소'}
+
+최근 측정 트렌드:
+${trendStr}`;
+  }
+
+  // 리포트 번호 기반으로 톤 모드 순환 (매번 다른 스타일)
+  const toneIndex = S.reports.length % 4;
+  const toneGuide = [
+    '코치 모드: 따뜻하게 칭찬하되 다음 액션을 구체적으로 제시하세요.',
+    '팩폭 모드: 솔직하고 직설적으로, 포장 없이 현실을 말하세요. 냉정하지만 틀리지 않게.',
+    '데이터 모드: 수치와 비율 중심으로, 체지방/근육 비율 변화를 분석적으로 설명하세요.',
+    '미래예측 모드: 지금 추세가 4주·8주 지속되면 몸이 어떻게 달라질지 구체적으로 예측하세요.',
+  ][toneIndex];
+
+  // 비유 카테고리 순환 (매번 다른 비유)
+  const analogyIndex = S.reports.length % 5;
+  const analogyGuide = [
+    '일상 사물 비유: 아이폰 무게, 물병, 책 무게 등 손에 잡히는 물건으로 체지방량을 표현하세요.',
+    '신체 체감 비유: 관절 부하, 심장 부담, 혈관 상태 등 몸 안의 변화로 표현하세요.',
+    '시간/속도 비유: "이 페이스면 몇 주 후 어떤 옷을 입을 수 있다" 등 시간축으로 표현하세요.',
+    '경제적 비유: 마운자로 몇 회분, 이번 달 식비 등 돈으로 환산해서 표현하세요.',
+    '사회적 비유: 의사가 먼저 알아챌 수준, 주변에서 물어볼 시점 등 사회적 맥락으로 표현하세요.',
+  ][analogyIndex];
+
+  const systemPrompt = `당신은 체성분 분석 코치입니다. 인바디 데이터를 보고 짧고 임팩트 있는 리포트를 작성합니다.
+
+오늘의 톤: ${toneGuide}
+오늘의 비유 방식: ${analogyGuide}
+
+규칙:
+1. 반드시 위의 톤과 비유 방식을 따를 것
+2. 2~4문장, 200자 이내
+3. 트렌드가 있으면 단순 비교가 아닌 흐름을 언급할 것
+4. 좋은 방향: 다음 milestone(수면/테스토스테론/관절 등)까지 얼마나 남았는지 예고
+5. 나쁜 방향: 이 추세 지속 시 n주 후 구체적 결과 경고 (단순 "주의하세요" 금지)
+6. 첫 측정: 현재 체지방 총량을 위의 비유로 표현 + 목표 달성 시 변화 예고
+7. HTML 사용 가능: <span class="highlight">강조</span> 또는 <span class="warn-text">경고문구</span>
+8. 반드시 한국어, 존댓말`;
+
+  try {
+    const proxy    = S.proxyUrl || localStorage.getItem('fatcut_proxy') || '';
+    const endpoint = proxy
+      ? proxy.replace(/\/$/, '') + '/v1/messages'
+      : 'https://api.anthropic.com/v1/messages';
+    const headers  = proxy
+      ? { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+      : { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: context }]
+      })
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+    const text = data.content?.[0]?.text?.trim() || '';
+    if (!text) return;
+
+    const now  = new Date();
+    const date = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    S.reports.unshift({ date, text, type: mode });
+    if (S.reports.length > 10) S.reports.pop();
+    S.reportLoading = false;
+    renderHome();
+
+    // Supabase 리포트 업데이트
+    if (S._lastMeasurementId) {
+      updateReportInSupabase(S._lastMeasurementId, text, mode);
+    }
+
+  } catch (e) {
+    console.warn('리포트 생성 실패:', e);
+    S.reportLoading = false;
+    // 실패해도 UI는 조용히 처리 (스피너만 제거)
+    renderHome();
+  }
+}
+
+// ═══════════════════════════════
+//  기기 ID 관리
+// ═══════════════════════════════
+function copyDeviceId() {
+  const id = S.deviceId || getDeviceId();
+  navigator.clipboard.writeText(id).then(() => {
+    const el = document.getElementById('device-id-display');
+    const orig = el.textContent;
+    el.textContent = '복사됨!';
+    setTimeout(() => el.textContent = orig, 1500);
+  });
+}
+
+async function changeDeviceId() {
+  const newId = document.getElementById('device-id-input')?.value?.trim();
+  if (!newId || newId.length < 10) {
+    alert('올바른 기기 ID를 입력해주세요.');
+    return;
+  }
+  S.deviceId = newId;
+  localStorage.setItem('fatcut_device_id', newId);
+  S.history = [];
+  S.reports = [];
+  closeSettings();
+  await syncFromSupabase();
+}
+
+// ═══════════════════════════════
+//  유틸
+// ═══════════════════════════════
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+
+// ═══════════════════════════════
+//  Supabase 클라이언트
+// ═══════════════════════════════
+const SUPA_URL = 'https://hgxaolnuncunctlreqlv.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneGFvbG51bmN1bmN0bHJlcWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMTM5MDUsImV4cCI6MjA5MTY4OTkwNX0.P7x8C0hXlAftj0Cy5PdpZTpcY_hKwNGXpMqBB4_LQH8';
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY, {
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+    }
+  },
+  db: { schema: 'public' },
+  auth: { persistSession: false },
+});
+
+// 기기 ID 초기화 (없으면 생성)
+function getDeviceId() {
+  let id = localStorage.getItem('fatcut_device_id');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('fatcut_device_id', id);
+  }
+  return id;
+}
+
+// ── Supabase REST 직접 호출 헬퍼 (SDK 대신 사용 - 모바일 호환성 높음)
+async function supaFetch(path, options = {}) {
+  const url = SUPA_URL + '/rest/v1/' + path;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...(options.headers || {}),
+    }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`[${res.status}] ${err.message || err.code || res.statusText}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// ── Supabase에서 데이터 불러오기
+async function syncFromSupabase() {
+  const deviceId = S.deviceId;
+  console.log('🔄 Supabase 동기화 시작, deviceId:', deviceId);
+  try {
+    // 사용자 설정 불러오기
+    let user = null;
+    try {
+      const userList = await supaFetch(
+        `users?device_id=eq.${encodeURIComponent(deviceId)}&limit=1`
+      );
+      user = userList?.[0] || null;
+    } catch(e) {
+      console.warn('⚠️ 사용자 설정 로드 실패:', e.message);
+    }
+
+    if (user) {
+      S.goalFatPct  = user.goal_fat_pct  ?? S.goalFatPct;
+      S.startFatPct = user.start_fat_pct ?? S.startFatPct;
+      S.startWeight = user.start_weight  ?? S.startWeight;
+      S.mounjaro    = user.mounjaro_cost ?? S.mounjaro;
+      S.pace        = user.pace          ?? S.pace;
+    }
+
+    // 측정 기록 불러오기 (최신순)
+    let measurements = null;
+    try {
+      measurements = await supaFetch(
+        `measurements?device_id=eq.${encodeURIComponent(deviceId)}&order=measured_at.desc&limit=50`
+      );
+    } catch(e) {
+      console.warn('⚠️ 측정 기록 로드 실패:', e.message);
+    }
+    console.log('📥 불러온 측정 기록:', measurements?.length ?? 0, '개');
+
+    if (measurements && measurements.length > 0) {
+      // 최신 측정값을 현재 상태로
+      const latest = measurements[0];
+      S.weight  = latest.weight  ?? S.weight;
+      S.muscle  = latest.muscle  ?? S.muscle;
+      S.fatPct  = latest.fat_pct ?? S.fatPct;
+
+      // 히스토리 재구성
+      S.history = measurements.map(m => {
+        const date = new Date(m.measured_at);
+        const dateStr = `${date.getMonth()+1}/${date.getDate()}`;
+        return {
+          id:        m.id,
+          date:      dateStr,
+          weight:    m.weight,
+          muscle:    m.muscle,
+          fatPct:    m.fat_pct,
+          delta:     0, // 아래서 계산
+          reportText: m.report_text,
+          reportType: m.report_type,
+        };
+      });
+
+      // delta 계산 (이전 측정 대비 체지방률 변화)
+      for (let i = 0; i < S.history.length - 1; i++) {
+        S.history[i].delta = parseFloat(
+          (S.history[i].fatPct - S.history[i+1].fatPct).toFixed(2)
+        );
+      }
+
+      // 리포트 복원 (저장된 리포트가 있는 것만)
+      S.reports = measurements
+        .filter(m => m.report_text)
+        .map(m => {
+          const date = new Date(m.measured_at);
+          return {
+            date: `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`,
+            text: m.report_text,
+            type: m.report_type || 'baseline',
+          };
+        });
+    }
+
+    render();
+  } catch(e) {
+    console.warn('Supabase 동기화 실패:', e.message || e);
+    render();
+  }
+}
+
+// ── 사용자 설정 저장
+async function saveUserToSupabase() {
+  const deviceId = S.deviceId || getDeviceId();
+  if (!deviceId) return;
+  try {
+    await supaFetch('users', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        device_id:     deviceId,
+        goal_fat_pct:  S.goalFatPct,
+        start_fat_pct: S.startFatPct,
+        start_weight:  S.startWeight,
+        mounjaro_cost: S.mounjaro,
+        pace:          S.pace,
+      })
+    });
+    console.log('✅ 사용자 설정 저장 성공');
+  } catch(e) {
+    console.error('❌ 사용자 설정 저장 실패:', e.message);
+  }
+}
+
+// ── 측정 기록 저장
+async function saveMeasurementToSupabase(data, reportText, reportType) {
+  const deviceId = S.deviceId || getDeviceId();
+  if (!deviceId) { console.error('❌ device_id 없음'); return null; }
+
+  const payload = {
+    device_id:    deviceId,
+    weight:       data.weight   ?? null,
+    muscle:       data.muscle   ?? null,
+    fat_pct:      data.fatPct   ?? null,
+    fat_kg:       (data.weight && data.fatPct) ? +(data.weight * data.fatPct / 100).toFixed(1) : null,
+    visceral_fat: data.visceralFat ?? null,
+    bmr:          data.bmr         ?? null,
+    report_text:  reportText       || null,
+    report_type:  reportType       || null,
+  };
+
+  console.log('📤 Supabase 저장 시도:', deviceId, payload.fat_pct);
+  try {
+    const result = await supaFetch('measurements', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify(payload)
+    });
+    const inserted = Array.isArray(result) ? result[0] : result;
+    console.log('✅ 측정 저장 성공:', inserted?.id);
+    return inserted;
+  } catch(e) {
+    console.error('❌ 측정 저장 실패:', e.message);
+    return null;
+  }
+}
+
+// ── 리포트 생성 후 해당 측정 기록 업데이트
+async function updateReportInSupabase(measurementId, reportText, reportType) {
+  if (!measurementId) return;
+  try {
+    await supaFetch(`measurements?id=eq.${measurementId}`, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ report_text: reportText, report_type: reportType })
+    });
+  } catch(e) { console.warn('리포트 업데이트 실패:', e.message); }
+}
+
+// ═══════════════════════════════
+//  데이터 영속성 (localStorage)
+// ═══════════════════════════════
+function saveData() {
+  const data = {
+    weight:      S.weight,
+    muscle:      S.muscle,
+    fatPct:      S.fatPct,
+    startFatPct: S.startFatPct,
+    startWeight: S.startWeight,
+    goalFatPct:  S.goalFatPct,
+    mounjaro:    S.mounjaro,
+    pace:        S.pace,
+    history:     S.history,
+    reports:     S.reports,
+  };
+  localStorage.setItem('fatcut_data', JSON.stringify(data));
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem('fatcut_data');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    Object.assign(S, d);
+  } catch(e) {
+    console.warn('데이터 로드 실패:', e);
+  }
+}
+
+// ═══════════════════════════════
+//  줌 방지 (모바일 웹앱)
+// ═══════════════════════════════
+document.addEventListener('touchstart', (e) => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+let _lastTap = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - _lastTap < 300) e.preventDefault();
+  _lastTap = now;
+}, { passive: false });
+
+// ═══════════════════════════════
+//  초기화
+// ═══════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  S.apiKey   = localStorage.getItem('fatcut_key')   || '';
+  S.proxyUrl = localStorage.getItem('fatcut_proxy') || '';
+  S.deviceId = getDeviceId();
+
+  // 로컬 데이터 먼저 렌더 (빠른 초기 표시)
+  loadData();
+  render();
+
+  // Supabase에서 최신 데이터 동기화
+  await syncFromSupabase();
+});
+</script>
+</body>
+</html>
