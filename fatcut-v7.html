@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>FATCUT</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg:       #161616;
+    --card:     #29293B;
+    --card2:    #1E1E2E;
+    --green:    #00FB5C;
+    --green-w:  #00C547;  /* 흰색 배경 위 그린 */
+    --white:    #FFFFFF;
+    --gray1:    #888888;
+    --gray2:    #8F919C;
+    --gray3:    #BEBECE;
+    --red:      #FF3B49;
+    --border:   rgba(255,255,255,0.07);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── 앱 루트 ── */
+  #app {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── 스크린 ── */
+  .screen {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+  .screen.active {
+    display: flex;
+    animation: fadeUp 0.2s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── 스크롤 영역 ── */
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 8px 0 24px;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* ── 헤더 ── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px 12px;
+    flex-shrink: 0;
+  }
+  .logo {
+    font-family: 'Black Han Sans', -apple-system, sans-serif;
+    font-size: 32px;
+    font-weight: 400;
+    color: var(--green);
+    letter-spacing: -0.5px;
+  }
+  .header-actions { display: flex; gap: 4px; }
+  .icon-btn {
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 12px;
+    color: var(--white);
+    transition: background 0.15s;
+  }
+  .icon-btn:active { background: rgba(255,255,255,0.08); }
+  .icon-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── 스크린 헤더 (프로토콜·히스토리) ── */
+  .screen-header {
+    padding: 16px 20px 12px;
+    flex-shrink: 0;
+  }
+  .screen-title { font-size: 32px; font-weight: 800; color: var(--white); letter-spacing: -0.03em; }
+  .screen-sub   { font-size: 16px; font-weight: 700; color: var(--white); margin-top: 4px; line-height: 1.5; }
+
+  /* ── 흰색 카드 (홈 메트릭) ── */
+  .wcard {
+    background: #FFFFFF;
+    border-radius: 32px;
+    padding: 24px;
+    margin: 0 20px 16px;
+  }
+
+  /* 흰색 카드 — 스탯 행 */
+  .wstats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .wstat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .wlabel {
+    font-size: 14px;
+    font-weight: 700;
+    color: #51556C;
+    letter-spacing: -0.5px;
+  }
+  .wval {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .wnum {
+    font-size: 32px;
+    font-weight: 800;
+    color: #161616;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .wunit {
+    font-size: 16px;
+    font-weight: 600;
+    color: #161616;
+  }
+
+  /* 흰색 카드 — 구분선 */
+  .wdiv {
+    height: 1px;
+    background: rgba(0,0,0,0.08);
+    margin: 16px 0;
+  }
+
+  /* 흰색 카드 — AI 리포트 텍스트 */
+  .wai {
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: -0.5px;
+    color: #161616;
+  }
+  .wai .highlight { color: var(--green-w); font-weight: 700; }
+  .wai .warn-text { color: var(--red); font-weight: 700; }
+
+  .wai-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--gray1);
+  }
+  .wai-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(0,197,71,0.2);
+    border-top-color: var(--green-w);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  /* 흰색 카드 — 메트릭 (중앙 정렬, % 감량 / D-day / 마운자로) */
+  .wmetric { text-align: center; }
+  .wmlabel {
+    font-size: 14px;
+    font-weight: 700;
+    color: #51556C;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .wmval {
+    font-size: 40px;
+    font-weight: 800;
+    color: var(--green-w);
+    letter-spacing: -0.5px;
+    line-height: 1.4;
+  }
+  .wmunit {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--green-w);
+  }
+  .wmsub {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--green-w);
+    letter-spacing: -0.5px;
+    margin-top: 4px;
+  }
+  .wmsub.bad { color: var(--red); }
+
+  /* ── 섹션 타이틀 (오늘의 팁 위) ── */
+  .tip-section-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--white);
+    text-align: center;
+    letter-spacing: -0.5px;
+    line-height: 1.4;
+    padding: 0 20px;
+    margin: 4px 0 12px;
+  }
+
+  /* ── 다크 카드 (오늘의 팁, 프로토콜, 히스토리 공통) ── */
+  .dcard {
+    background: var(--card);
+    border-radius: 32px;
+    padding: 24px;
+    margin: 0 20px 16px;
+  }
+
+  /* 오늘의 팁 카드 */
+  .dtip-head {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--white);
+    letter-spacing: -0.5px;
+    line-height: 1.4;
+    margin-bottom: 24px;
+  }
+  .dtip-head .g { color: var(--green); }
+  .dtip-list {
+    list-style: disc;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .dtip-list li {
+    font-size: 14px;
+    color: var(--white);
+    line-height: 1.5;
+  }
+
+  /* ── 프로토콜 카드 ── */
+  .proto-card {
+    background: var(--card);
+    border-radius: 32px;
+    padding: 24px;
+    margin: 0 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+  }
+  .proto-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: -0.5px;
+    text-align: center;
+    line-height: 1.4;
+    width: 100%;
+  }
+  .proto-big-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .proto-big {
+    font-size: 40px;
+    font-weight: 800;
+    color: var(--green);
+    letter-spacing: -0.5px;
+    line-height: 1.4;
+  }
+  .proto-unit {
+    font-size: 14px;
+    color: var(--white);
+  }
+  .proto-desc {
+    font-size: 14px;
+    color: var(--gray3);
+    line-height: 1.4;
+    text-align: center;
+    letter-spacing: -0.5px;
+    width: 100%;
+  }
+  .proto-desc .g { color: var(--green); }
+
+  /* ── 히스토리 카드 ── */
+  .hcard {
+    background: var(--card);
+    border-radius: 32px;
+    padding: 24px;
+    margin: 0 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .hcard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .hdate { color: var(--white); }
+  .hdelta-good { color: var(--green); }
+  .hdelta-bad  { color: var(--red); }
+  .hdiv {
+    height: 1px;
+    background: rgba(255,255,255,0.08);
+  }
+  .hstats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .hstat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .hlabel {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gray2);
+  }
+  .hval-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .hnum {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--white);
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .hunit {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--white);
+  }
+
+  /* ── 빈 상태 ── */
+  .empty-state {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 32px 32px 60px;
+    text-align: center;
+  }
+  .empty-icon {
+    width: 68px; height: 68px;
+    background: var(--card);
+    border-radius: 22px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; margin-bottom: 20px;
+  }
+  .empty-title { font-size: 19px; font-weight: 800; color: var(--white); letter-spacing: -0.02em; margin-bottom: 8px; }
+  .empty-sub { font-size: 14px; color: var(--gray2); line-height: 1.65; margin-bottom: 28px; }
+  .empty-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--green); color: #000;
+    border: none; border-radius: 16px;
+    padding: 14px 28px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 800;
+    cursor: pointer;
+  }
+  .empty-btn:active { opacity: 0.85; }
+  .empty-btn svg { width: 18px; height: 18px; stroke: #000; fill: none; stroke-width: 2.5; stroke-linecap: round; }
+
+  /* ── 탭바 ── */
+  .tabbar {
+    display: flex; justify-content: space-around; align-items: center;
+    padding-top: 18px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    background: #000000;
+    flex-shrink: 0;
+  }
+  .tab-item {
+    display: flex; flex-direction: column; align-items: center;
+    cursor: pointer; opacity: 0.35;
+    transition: opacity 0.18s;
+    padding: 4px 32px;
+  }
+  .tab-item.active { opacity: 1; }
+  .tab-item svg { width: 28px; height: 28px; stroke: var(--white); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .tab-item.active svg { stroke: var(--green); }
+
+  /* ── 오버레이 공통 ── */
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); z-index: 100;
+    align-items: flex-end; justify-content: center;
+  }
+  .overlay.open { display: flex; }
+
+  /* ── 바텀시트 ── */
+  .sheet {
+    width: 100%; max-width: 480px;
+    background: #1C1C28;
+    border-radius: 24px 24px 0 0;
+    padding: 12px 16px;
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+    animation: slideUp 0.26s cubic-bezier(0.32,0.72,0,1);
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px; margin: 0 auto 16px;
+  }
+  .sheet-title { font-size: 12px; font-weight: 500; color: var(--gray2); text-align: center; margin-bottom: 12px; }
+  .sheet-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 8px; border-radius: 14px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .sheet-item:active { background: rgba(255,255,255,0.06); }
+  .sheet-icon {
+    width: 44px; height: 44px; background: var(--card);
+    border-radius: 14px; display: flex; align-items: center;
+    justify-content: center; font-size: 20px; flex-shrink: 0;
+  }
+  .sheet-item-label { font-size: 15px; font-weight: 600; color: var(--white); }
+  .sheet-item-sub { font-size: 11px; color: var(--gray2); margin-top: 1px; }
+  .sheet-cancel {
+    margin-top: 8px; width: 100%;
+    background: var(--card); border: none;
+    border-radius: 14px; padding: 15px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 600; color: var(--gray2); cursor: pointer;
+  }
+
+  /* ── 설정 패널 ── */
+  .panel {
+    display: none; position: fixed; inset: 0;
+    background: var(--bg); z-index: 200;
+    flex-direction: column;
+  }
+  .panel.open { display: flex; animation: slideRight 0.26s cubic-bezier(0.32,0.72,0,1); }
+  @keyframes slideRight {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+  }
+  .panel-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 20px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    flex-shrink: 0;
+  }
+  .back-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--card); display: flex;
+    align-items: center; justify-content: center; cursor: pointer;
+  }
+  .back-btn svg { width: 18px; height: 18px; stroke: var(--white); fill: none; stroke-width: 2; stroke-linecap: round; }
+  .panel-title { font-size: 18px; font-weight: 800; color: var(--white); }
+  .panel-scroll { flex: 1; overflow-y: auto; padding: 0 16px 40px; }
+  .panel-scroll::-webkit-scrollbar { display: none; }
+
+  .section-label {
+    font-size: 11px; font-weight: 600; color: var(--gray1);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin: 20px 4px 8px;
+  }
+  .settings-card { background: var(--card); border-radius: 18px; overflow: hidden; margin-bottom: 10px; }
+  .settings-row {
+    display: flex; align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .row-label { font-size: 14px; font-weight: 500; color: var(--white); flex: 1; }
+  .row-sub { font-size: 11px; color: var(--gray2); margin-top: 2px; }
+
+  .s-input {
+    background: transparent; border: none; outline: none;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 700;
+    color: var(--green); text-align: right; width: 120px;
+  }
+  .s-input::placeholder { color: var(--gray1); }
+  .s-select {
+    background: transparent; border: none; outline: none;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 14px; font-weight: 700;
+    color: var(--green); text-align: right; cursor: pointer;
+    -webkit-appearance: none;
+  }
+  .s-textarea {
+    width: 100%; background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border); border-radius: 12px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 13px; color: var(--white);
+    padding: 12px 14px; outline: none; resize: none; line-height: 1.5;
+  }
+  .s-textarea::placeholder { color: var(--gray1); }
+
+  .sync-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px;
+    background: rgba(143,145,156,0.15); color: var(--gray2);
+  }
+  .sync-badge.ok  { background: rgba(0,251,92,0.12); color: var(--green); }
+  .sync-badge.err { background: rgba(255,59,73,0.12); color: var(--red); }
+
+  .primary-btn {
+    width: 100%; padding: 15px;
+    background: var(--green); color: #000;
+    border: none; border-radius: 14px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 800;
+    cursor: pointer; margin-top: 12px;
+  }
+  .primary-btn:active { opacity: 0.85; }
+  .secondary-btn {
+    width: 100%; padding: 14px;
+    background: var(--card); color: var(--gray3);
+    border: none; border-radius: 14px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; margin-top: 8px;
+  }
+
+  /* ── 파싱 모달 ── */
+  .parse-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8); z-index: 300;
+    align-items: flex-end; justify-content: center;
+  }
+  .parse-overlay.open { display: flex; }
+  .parse-sheet {
+    width: 100%; max-width: 480px;
+    background: #1C1C28;
+    border-radius: 24px 24px 0 0;
+    padding: 20px 20px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    animation: slideUp 0.26s cubic-bezier(0.32,0.72,0,1);
+  }
+  .parse-handle {
+    width: 36px; height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px; margin: 0 auto 20px;
+  }
+  .parse-title { font-size: 18px; font-weight: 800; color: var(--white); margin-bottom: 6px; }
+  .parse-sub { font-size: 13px; color: var(--gray2); margin-bottom: 20px; line-height: 1.5; }
+
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+  .result-item { background: var(--card); border-radius: 14px; padding: 12px 14px; }
+  .result-label { font-size: 10px; color: var(--gray2); margin-bottom: 4px; }
+  .result-val { font-size: 22px; font-weight: 800; color: var(--white); letter-spacing: -0.02em; }
+  .result-val.acc { color: var(--green); }
+  .result-unit { font-size: 12px; color: var(--gray2); margin-left: 2px; }
+
+  .spinner-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 0; }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(0,251,92,0.2);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .spinner-text { font-size: 14px; color: var(--gray2); }
+
+  .error-box {
+    background: rgba(255,59,73,0.08);
+    border: 1px solid rgba(255,59,73,0.2);
+    border-radius: 12px; padding: 14px;
+    font-size: 13px; color: var(--red);
+    line-height: 1.6; margin-bottom: 16px;
+  }
+
+  /* ── 수동입력 ── */
+  .manual-row {
+    background: var(--card); border-radius: 14px;
+    padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .manual-row-label { font-size: 14px; color: var(--white); }
+  .manual-input-wrap { display: flex; align-items: center; gap: 6px; }
+  .manual-input {
+    background: transparent; border: none; outline: none;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 20px; font-weight: 800; color: var(--green);
+    width: 72px; text-align: right;
+  }
+  .manual-unit { font-size: 13px; color: var(--gray2); }
+
+  /* ── 토스트 ── */
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    background: var(--card); color: var(--white);
+    padding: 10px 20px; border-radius: 20px;
+    font-size: 13px; font-weight: 600;
+    z-index: 9999; opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+  }
+  .toast.show { opacity: 1; }
+  .toast.ok   { border-color: rgba(0,251,92,0.25); }
+  .toast.err  { border-color: rgba(255,59,73,0.25); color: var(--red); }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ══════ 홈 ══════ -->
+  <div class="screen active" id="screen-home">
+    <div class="header">
+      <div class="logo">FATCUT</div>
+      <div class="header-actions">
+        <div class="icon-btn" onclick="openSettings()">
+          <svg viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div class="icon-btn" onclick="openUpload()">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="scroll" id="home-content"></div>
+  </div>
+
+  <!-- ══════ 프로토콜 ══════ -->
+  <div class="screen" id="screen-protocol">
+    <div class="screen-header">
+      <div class="screen-title">프로토콜</div>
+      <div class="screen-sub">내 체성분에 맞춰 린매스업 전략을 세워드려요</div>
+    </div>
+    <div class="scroll" id="protocol-content"></div>
+  </div>
+
+  <!-- ══════ 히스토리 ══════ -->
+  <div class="screen" id="screen-history">
+    <div class="header" style="align-items:flex-start">
+      <div>
+        <div class="screen-title">히스토리</div>
+        <div class="screen-sub">체성분 측정 기록</div>
+      </div>
+      <div class="header-actions" style="margin-top:4px">
+        <div class="icon-btn" onclick="openUpload()">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="scroll" id="history-content"></div>
+  </div>
+
+  <!-- ══════ 탭바 ══════ -->
+  <div class="tabbar">
+    <div class="tab-item active" id="tab-home" onclick="switchTab('home')">
+      <svg viewBox="0 0 24 24"><path d="M15.6 2.7a10 10 0 1 0 5.7 5.7"/><circle cx="12" cy="12" r="2"/><path d="M13.4 10.6 19 5"/></svg>
+    </div>
+    <div class="tab-item" id="tab-protocol" onclick="switchTab('protocol')">
+      <svg viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
+    </div>
+    <div class="tab-item" id="tab-history" onclick="switchTab('history')">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ══════ 업로드 시트 ══════ -->
+<div class="overlay" id="upload-overlay" onclick="overlayClose('upload-overlay')">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">인바디 측정 결과 추가</div>
+    <div class="sheet-item" onclick="triggerCamera()">
+      <div class="sheet-icon">📷</div>
+      <div>
+        <div class="sheet-item-label">카메라로 촬영</div>
+        <div class="sheet-item-sub">인바디 화면을 직접 촬영해요</div>
+      </div>
+    </div>
+    <div class="sheet-item" onclick="triggerGallery()">
+      <div class="sheet-icon">🖼️</div>
+      <div>
+        <div class="sheet-item-label">갤러리에서 선택</div>
+        <div class="sheet-item-sub">저장된 스크린샷을 불러와요</div>
+      </div>
+    </div>
+    <div class="sheet-item" onclick="openManual()">
+      <div class="sheet-icon">✏️</div>
+      <div>
+        <div class="sheet-item-label">직접 입력</div>
+        <div class="sheet-item-sub">수치를 직접 타이핑해요</div>
+      </div>
+    </div>
+    <button class="sheet-cancel" onclick="overlayClose('upload-overlay')">취소</button>
+  </div>
+</div>
+
+<!-- 파일 inputs -->
+<input type="file" id="gallery-input" accept="image/*" style="display:none">
+<input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+
+<!-- ══════ 설정 패널 ══════ -->
+<div class="panel" id="settings-panel">
+  <div class="panel-header">
+    <div class="back-btn" onclick="closeSettings()">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    </div>
+    <div class="panel-title">설정</div>
+  </div>
+  <div class="panel-scroll">
+
+    <div class="section-label">내 정보</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div class="row-label">시작 체지방률</div>
+        <input class="s-input" id="cfg-start-fat" type="number" value="30.0" step="0.1">
+        <span style="font-size:13px;color:var(--gray2);margin-left:4px">%</span>
+      </div>
+      <div class="settings-row">
+        <div class="row-label">목표 체지방률</div>
+        <input class="s-input" id="cfg-goal-fat" type="number" value="18.0" step="0.1">
+        <span style="font-size:13px;color:var(--gray2);margin-left:4px">%</span>
+      </div>
+      <div class="settings-row">
+        <div class="row-label">마운자로 월 비용</div>
+        <input class="s-input" id="cfg-mounjaro" type="number" value="340000" step="10000">
+        <span style="font-size:13px;color:var(--gray2);margin-left:4px">원</span>
+      </div>
+      <div class="settings-row">
+        <div class="row-label">감량 페이스</div>
+        <select class="s-select" id="cfg-pace">
+          <option value="0.3">0.3kg/주</option>
+          <option value="0.5" selected>0.5kg/주</option>
+          <option value="0.7">0.7kg/주</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-label">AI 파싱 설정</div>
+    <div class="settings-card">
+      <div style="padding:14px 16px">
+        <div class="row-label" style="margin-bottom:4px">파싱 추가 지침</div>
+        <div class="row-sub" style="margin-bottom:10px">기기 모델 등 추가 정보를 입력하면 파싱 정확도가 올라가요</div>
+        <textarea class="s-textarea" id="cfg-prompt" rows="4"
+          placeholder="예: InBody 270 기기를 사용합니다. 측정 단위는 kg입니다."></textarea>
+      </div>
+    </div>
+
+    <div class="section-label">기기 정보</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <div style="flex:1">
+          <div class="row-label">기기 ID</div>
+          <div class="row-sub" id="device-id-display" style="font-family:monospace;font-size:10px;word-break:break-all;margin-top:4px;color:var(--green)">로딩중...</div>
+        </div>
+        <button onclick="copyDeviceId()" style="background:var(--card2);border:none;border-radius:10px;padding:8px 12px;font-family:'Pretendard',sans-serif;font-size:12px;color:var(--gray3);cursor:pointer;flex-shrink:0;margin-left:8px">복사</button>
+      </div>
+      <div class="settings-row" style="justify-content:space-between">
+        <div class="row-label">Supabase 동기화</div>
+        <span class="sync-badge" id="sync-badge">대기중</span>
+      </div>
+      <div style="padding:0 16px 14px">
+        <div class="row-sub">새 기기에서 같은 ID 입력 시 데이터 복원</div>
+        <input class="s-input" id="device-id-input" type="text"
+          placeholder="다른 기기 ID 입력 (데이터 이전용)"
+          style="width:100%;text-align:left;font-size:12px;font-weight:500;margin-top:8px;color:var(--white)">
+        <button onclick="changeDeviceId()" id="change-id-btn" style="width:100%;background:var(--card2);border:none;border-radius:10px;padding:10px;font-family:'Pretendard',sans-serif;font-size:13px;color:var(--gray2);cursor:pointer;margin-top:6px">이 ID로 데이터 불러오기</button>
+        <button onclick="forceSyncFromSupabase()" style="width:100%;background:var(--card2);border:none;border-radius:10px;padding:10px;font-family:'Pretendard',sans-serif;font-size:13px;color:var(--green);cursor:pointer;margin-top:6px">↻ 지금 동기화</button>
+      </div>
+    </div>
+
+    <button class="primary-btn" onclick="saveSettings()">저장</button>
+
+  </div>
+</div>
+
+<!-- ══════ 파싱 모달 ══════ -->
+<div class="parse-overlay" id="parse-overlay">
+  <div class="parse-sheet">
+    <div class="parse-handle"></div>
+    <div id="parse-body"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  Worker URL 설정 — 여기에만 입력하면 됩니다
+//  API 키는 Cloudflare Worker 환경변수(CLAUDE_API_KEY)에 저장
+//  → 이 파일에 API 키를 절대 입력하지 마세요
+// ═══════════════════════════════════════════════════
+const PROXY_URL = 'https://fatcut.marson.workers.dev/';  // Cloudflare Worker URL
+// ═══════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════
+//  Supabase 설정
+// ═══════════════════════════════════════════════════
+const SUPA_URL = 'https://hgxaolnuncunctlreqlv.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneGFvbG51bmN1bmN0bHJlcWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMTM5MDUsImV4cCI6MjA5MTY4OTkwNX0.P7x8C0hXlAftj0Cy5PdpZTpcY_hKwNGXpMqBB4_LQH8';
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY, {
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+    }
+  },
+  db: { schema: 'public' },
+  auth: { persistSession: false },
+});
+
+// ═══════════════════════════════════════════════════
+//  효과 데이터 (API 없을 때 데일리 팁 폴백용)
+// ═══════════════════════════════════════════════════
+const EFFECTS = [
+  {
+    kg: 1,
+    line1: '지금보다 1kg 더 빠지면',
+    line2: '수면 효율',
+    accent: '+12% 증가',
+    bullets: ['수면 질 즉각 개선 — 렙틴/그렐린 균형 회복', '아침 기상 피로도 감소, 에너지 안정', '혈당 스파이크 완화 (내장지방 감소 시작)'],
+  },
+  {
+    kg: 3,
+    line1: '3kg 더 빠지면',
+    line2: '유의미한',
+    accent: '테스토스테론 수치 상승',
+    bullets: ['지방이 에스트로겐 전환되는 걸 억제', '리비도, 컨디션, 운동 퍼포먼스 개선', '인슐린 감수성 회복, 탄수화물 처리 개선'],
+  },
+  {
+    kg: 5,
+    line1: '5kg 더 빠지면',
+    line2: '무릎·허리',
+    accent: '관절 통증 감소',
+    bullets: ['관절 부하 5~7kg 경감', '혈압 정상화 시작', '인지력·집중력 개선, 뇌 혈류 증가'],
+  },
+  {
+    kg: 8,
+    line1: '8kg 더 빠지면',
+    line2: '뇌 혈류·인지력',
+    accent: '눈에 띄게 개선',
+    bullets: ['기억력·집중력 표준 검사에서 유의미하게 향상', '혈압 안정화, 심혈관 리스크 감소', '생산성·기분 지속적으로 개선'],
+  },
+];
+
+// ═══════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════
+const S = {
+  weight: 0, muscle: 0, fatPct: 0,
+  startFatPct: 30, startWeight: 80,
+  goalFatPct: 18,
+  mounjaro: 340000,
+  pace: 0.5,
+  history: [],
+  reports: [],
+  reportLoading: false,
+  dailyTip: null,     // { date, line1, line2, accent, bullets }
+  tipLoading: false,
+  deviceId: '',
+  syncing: false,
+  _lastMeasurementId: null,
+};
+
+// ═══════════════════════════════════════════════════
+//  렌더링
+// ═══════════════════════════════════════════════════
+function render() {
+  renderHome();
+  renderProtocol();
+  renderHistory();
+}
+
+function hasData() { return S.history.length > 0; }
+
+function renderHome() {
+  const el = document.getElementById('home-content');
+  if (!hasData()) {
+    el.innerHTML = emptyStateHTML('📊', '첫 번째 인바디를 업로드해요',
+      '인바디 스크린샷 한 장이면\n체지방 감량 효과와\n마운자로 절약 금액을 바로 계산해드려요.',
+      'openUpload()');
+    return;
+  }
+
+  // 계산
+  const curFatKg   = S.weight * S.fatPct / 100;
+  const startFatKg = S.startWeight * S.startFatPct / 100;
+  const lostKg     = Math.max(0, startFatKg - curFatKg);
+  const lossPct    = Math.max(0, S.startFatPct - S.fatPct).toFixed(1);
+  const goalFatKg  = S.weight * S.goalFatPct / 100;
+  const remainKg   = Math.max(0, curFatKg - goalFatKg);
+  const wksLeft    = remainKg / S.pace;
+  const dDays      = Math.ceil(wksLeft * 7);
+  const wks        = lostKg / S.pace;
+  const saved      = Math.round(wks * (S.mounjaro / 4.33));
+
+  // D-day 트렌드 (이전 측정 대비)
+  let dDayTrendHtml = '';
+  if (S.history.length >= 2) {
+    const prev          = S.history[1];
+    const prevFatKg     = prev.weight * prev.fatPct / 100;
+    const prevRemainKg  = Math.max(0, prevFatKg - goalFatKg);
+    const prevDDays     = Math.ceil((prevRemainKg / S.pace) * 7);
+    const diff          = prevDDays - dDays;
+    if (diff > 0) {
+      dDayTrendHtml = `<div class="wmsub">저번보다 ${diff}일 더 단축했어요!</div>`;
+    } else if (diff < 0) {
+      dDayTrendHtml = `<div class="wmsub bad">저번보다 ${Math.abs(diff)}일 늘어났어요 🥹</div>`;
+    }
+  }
+
+  // 첫 번째 카드의 AI 리포트 파트
+  let reportHtml = '';
+  if (S.reports.length > 0) {
+    reportHtml = `
+      <div class="wdiv"></div>
+      <div class="wai">${S.reports[0].text}</div>`;
+  } else if (S.reportLoading) {
+    reportHtml = `
+      <div class="wdiv"></div>
+      <div class="wai-loading">
+        <div class="wai-spinner"></div>
+        <span>AI가 체성분을 분석하고 있어요...</span>
+      </div>`;
+  }
+
+  // 오늘의 팁 카드
+  const today    = new Date();
+  const todayStr = `${today.getMonth()+1}/${today.getDate()}`;
+  let tipHtml = '';
+
+  if (S.dailyTip && S.dailyTip.date === todayStr) {
+    const t = S.dailyTip;
+    tipHtml = `
+      <p class="tip-section-title">${todayStr}일 오늘의 다이어트 효과 &amp; 팁!</p>
+      <div class="dcard">
+        <div class="dtip-head">
+          ${t.line1}<br>
+          ${t.line2} <span class="g">${t.accent}</span>
+        </div>
+        <ul class="dtip-list">
+          ${t.bullets.map(b => `<li>${b}</li>`).join('')}
+        </ul>
+      </div>`;
+  } else if (S.tipLoading) {
+    tipHtml = `
+      <p class="tip-section-title">${todayStr}일 오늘의 다이어트 효과 &amp; 팁!</p>
+      <div class="dcard">
+        <div class="wai-loading" style="padding:12px 0">
+          <div class="wai-spinner" style="border-color:rgba(0,251,92,0.2);border-top-color:var(--green)"></div>
+          <span style="color:var(--gray2);font-size:13px">오늘의 팁을 불러오고 있어요...</span>
+        </div>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="wcard">
+      <div class="wstats">
+        <div class="wstat">
+          <div class="wlabel">체중</div>
+          <div class="wval"><span class="wnum">${S.weight}</span><span class="wunit">kg</span></div>
+        </div>
+        <div class="wstat">
+          <div class="wlabel">골격근량</div>
+          <div class="wval"><span class="wnum">${S.muscle}</span><span class="wunit">kg</span></div>
+        </div>
+        <div class="wstat">
+          <div class="wlabel">체지방률</div>
+          <div class="wval"><span class="wnum">${S.fatPct}</span><span class="wunit">%</span></div>
+        </div>
+      </div>
+      ${reportHtml}
+    </div>
+
+    <div class="wcard wmetric">
+      <div class="wmlabel">다이어트 시작일로 부터 체지방률</div>
+      <div><span class="wmval">${lossPct}</span><span class="wmunit">% 감량</span></div>
+    </div>
+
+    <div class="wcard wmetric">
+      <div class="wmlabel">지금 페이스면 목표달성까지</div>
+      <div><span class="wmval">D-${dDays}</span></div>
+      ${dDayTrendHtml}
+    </div>
+
+    <div class="wcard wmetric">
+      <div class="wmlabel">지금까지 아낀 마운자로 금액</div>
+      <div><span class="wmval">${saved.toLocaleString('ko-KR')}</span><span class="wmunit">원</span></div>
+    </div>
+
+    ${tipHtml}`;
+}
+
+function renderProtocol() {
+  const el = document.getElementById('protocol-content');
+  if (!hasData()) {
+    el.innerHTML = emptyStateHTML('⚡', '체성분 데이터가 필요해요',
+      '인바디를 업로드하면\n내 체중·골격근량 기반의\n맞춤 프로토콜을 계산해드려요.',
+      "switchTab('home');setTimeout(openUpload,200)");
+    return;
+  }
+  const protein    = Math.round(S.weight * 2.0);
+  const bmr        = Math.round(10 * S.weight + 6.25 * 170 - 5 * 30 + 5);
+  const targetKcal = Math.round(bmr * 1.4 - 400);
+  el.innerHTML = `
+    <div class="proto-card">
+      <div class="proto-name">단백질 목표</div>
+      <div class="proto-big-row">
+        <span class="proto-big">${protein}g</span>
+        <span class="proto-unit">/ 일</span>
+      </div>
+      <div class="proto-desc">체중 ${S.weight}kg × 2.0g = ${protein}g<br>린매스업 중 근손실을 방지하려면 <span class="g">매끼 ${Math.round(protein/4)}g 이상</span> 분배해주세요.</div>
+    </div>
+    <div class="proto-card">
+      <div class="proto-name">칼로리 적자</div>
+      <div class="proto-big-row">
+        <span class="proto-big">-400</span>
+        <span class="proto-unit">kcal / 일</span>
+      </div>
+      <div class="proto-desc">하루 목표 칼로리 <span class="g">${targetKcal.toLocaleString()}kcal</span><br><span class="g">300~500kcal 적자</span>가 근육 보존에 유리합니다.</div>
+    </div>
+    <div class="proto-card">
+      <div class="proto-name">웨이트 + HIIT</div>
+      <div class="proto-big-row">
+        <span class="proto-big">4</span>
+        <span class="proto-unit">회 / 주</span>
+      </div>
+      <div class="proto-desc">저항운동 3-4회, HIIT 1-2회를 해주세요<br>풀바디 루틴이 분할 운동보다 체지방 감량에 유리합니다.</div>
+    </div>`;
+}
+
+function renderHistory() {
+  const el = document.getElementById('history-content');
+  if (S.history.length === 0) {
+    el.innerHTML = emptyStateHTML('🕐', '아직 기록이 없어요',
+      '인바디를 업로드하면\n날짜별 체성분 변화를\n여기서 확인할 수 있어요.',
+      "switchTab('home');setTimeout(openUpload,200)");
+    return;
+  }
+  el.innerHTML = S.history.map(h => {
+    const isGood = h.delta <= 0;
+    const deltaStr = h.delta > 0 ? `+${h.delta}%` : `${h.delta}%`;
+    return `
+      <div class="hcard">
+        <div class="hcard-header">
+          <span class="hdate">${h.date}</span>
+          <span class="${isGood ? 'hdelta-good' : 'hdelta-bad'}">${deltaStr}</span>
+        </div>
+        <div class="hdiv"></div>
+        <div class="hstats">
+          <div class="hstat">
+            <div class="hlabel">체중</div>
+            <div class="hval-row"><span class="hnum">${h.weight}</span><span class="hunit">kg</span></div>
+          </div>
+          <div class="hstat">
+            <div class="hlabel">골격근량</div>
+            <div class="hval-row"><span class="hnum">${h.muscle}</span><span class="hunit">kg</span></div>
+          </div>
+          <div class="hstat">
+            <div class="hlabel">체지방률</div>
+            <div class="hval-row"><span class="hnum">${h.fatPct}</span><span class="hunit">%</span></div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function emptyStateHTML(icon, title, sub, action) {
+  return `
+    <div class="empty-state">
+      <div class="empty-icon">${icon}</div>
+      <div class="empty-title">${title}</div>
+      <div class="empty-sub">${sub.replace(/\n/g,'<br>')}</div>
+      <button class="empty-btn" onclick="${action}">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        인바디 업로드하기
+      </button>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+//  탭 전환
+// ═══════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════
+//  업로드 플로우
+// ═══════════════════════════════════════════════════
+function openUpload()  { document.getElementById('upload-overlay').classList.add('open'); }
+function closeUpload() { document.getElementById('upload-overlay').classList.remove('open'); }
+function overlayClose(id) { document.getElementById(id).classList.remove('open'); }
+
+function triggerCamera()  { closeUpload(); document.getElementById('camera-input').click(); }
+function triggerGallery() { closeUpload(); document.getElementById('gallery-input').click(); }
+function openManual()     { closeUpload(); showManual(); }
+
+document.getElementById('gallery-input').addEventListener('change', e => {
+  if (e.target.files[0]) parseImage(e.target.files[0]);
+  e.target.value = '';
+});
+document.getElementById('camera-input').addEventListener('change', e => {
+  if (e.target.files[0]) parseImage(e.target.files[0]);
+  e.target.value = '';
+});
+
+// ═══════════════════════════════════════════════════
+//  Claude API 헬퍼
+//  API 키는 Worker 환경변수에 있으므로 헤더에 포함하지 않음
+// ═══════════════════════════════════════════════════
+function getApiEndpoint() {
+  return PROXY_URL.replace(/\/$/, '') + '/v1/messages';
+}
+
+function getApiHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+  };
+}
+
+// ═══════════════════════════════════════════════════
+//  인바디 이미지 파싱 (Claude Vision)
+// ═══════════════════════════════════════════════════
+async function parseImage(file) {
+  const overlay = document.getElementById('parse-overlay');
+  const body    = document.getElementById('parse-body');
+  overlay.classList.add('open');
+
+  body.innerHTML = `
+    <div class="parse-title">AI 분석 중</div>
+    <div class="parse-sub">Claude가 인바디 수치를 읽고 있어요</div>
+    <div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">이미지 분석 중...</div></div>`;
+
+  if (!PROXY_URL) {
+    body.innerHTML = `
+      <div class="parse-title">Worker URL 없음</div>
+      <div class="error-box">fatcut-v7.html 상단의 PROXY_URL을 먼저 입력해주세요.</div>
+      <button class="primary-btn" onclick="closeParse()">닫기</button>`;
+    return;
+  }
+
+  try {
+    const b64  = await toBase64(file);
+    const mime = file.type || 'image/jpeg';
+    const extra = document.getElementById('cfg-prompt')?.value || '';
+
+    const system = `당신은 인바디(InBody) 체성분 분석 결과를 읽는 전문가입니다.
+이미지에서 다음 수치를 정확하게 추출하세요:
+weight(체중 kg), muscle(골격근량 kg), fatPct(체지방률 %), fatKg(체지방량 kg), visceralFat(내장지방레벨 정수), bmr(기초대사량 kcal 정수)
+반드시 JSON만 응답하세요. 예: {"weight":78.1,"muscle":32.2,"fatPct":27.3,"fatKg":21.4,"visceralFat":7,"bmr":1680}
+찾을 수 없는 값은 null로 표시하세요.${extra ? '\n추가 정보: ' + extra : ''}`;
+
+    const res = await fetch(getApiEndpoint(), {
+      method: 'POST',
+      headers: getApiHeaders(),
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+            { type: 'text', text: '이 인바디 이미지의 수치를 JSON으로 추출해주세요.' }
+          ]
+        }]
+      })
+    });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e?.error?.message || `API 오류 (${res.status})`);
+    }
+
+    const data   = await res.json();
+    const text   = data.content?.[0]?.text || '';
+    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+    showParseResult(parsed);
+
+  } catch (err) {
+    body.innerHTML = `
+      <div class="parse-title">파싱 실패</div>
+      <div class="error-box">${err.message || '이미지를 읽지 못했어요. 더 선명한 사진으로 다시 시도해보세요.'}</div>
+      <button class="primary-btn" onclick="closeParse()">닫기</button>`;
+  }
+}
+
+function showParseResult(p) {
+  document.getElementById('parse-body').innerHTML = `
+    <div class="parse-title">수치 추출 완료 ✓</div>
+    <div class="parse-sub">확인 후 저장해주세요</div>
+    <div class="result-grid">
+      ${[
+        {l:'체중',     v:p.weight,      u:'kg',   a:false},
+        {l:'체지방률',  v:p.fatPct,      u:'%',    a:true },
+        {l:'골격근량',  v:p.muscle,      u:'kg',   a:false},
+        {l:'내장지방',  v:p.visceralFat, u:'레벨', a:false},
+      ].map(i=>`
+        <div class="result-item">
+          <div class="result-label">${i.l}</div>
+          <div class="result-val${i.a?' acc':''}">${i.v??'—'}<span class="result-unit">${i.v!=null?i.u:''}</span></div>
+        </div>`).join('')}
+    </div>
+    <button class="primary-btn" onclick='applyData(${JSON.stringify(p)})'>확인 · 저장</button>
+    <button class="secondary-btn" onclick="closeParse()">취소</button>`;
+}
+
+function applyData(p) {
+  if (p.weight != null) S.weight = p.weight;
+  if (p.muscle != null) S.muscle = p.muscle;
+  if (p.fatPct != null) S.fatPct = p.fatPct;
+  if (S.history.length === 0 && p.weight) S.startWeight = p.weight;
+
+  const now   = new Date();
+  const date  = `${now.getMonth()+1}/${now.getDate()}`;
+  const prev  = S.history[0]?.fatPct ?? p.fatPct;
+  const delta = parseFloat(((p.fatPct ?? 0) - prev).toFixed(1));
+  S.history.unshift({ date, weight: p.weight??S.weight, muscle: p.muscle??S.muscle, fatPct: p.fatPct??S.fatPct, delta });
+
+  if (!S.deviceId) S.deviceId = getDeviceId();
+  saveData();
+  closeParse();
+  render();
+
+  (async () => {
+    const inserted = await saveMeasurementToSupabase({
+      weight:      p.weight      ?? S.weight,
+      muscle:      p.muscle      ?? S.muscle,
+      fatPct:      p.fatPct      ?? S.fatPct,
+      visceralFat: p.visceralFat ?? null,
+      bmr:         p.bmr         ?? null,
+    }, null, null);
+    S._lastMeasurementId = inserted?.id || null;
+    generateReport();
+    generateDailyTip(true); // 새 측정 후 팁 강제 갱신
+  })();
+}
+
+function closeParse() { document.getElementById('parse-overlay').classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════
+//  수동 입력
+// ═══════════════════════════════════════════════════
+function showManual() {
+  const body = document.getElementById('parse-body');
+  document.getElementById('parse-overlay').classList.add('open');
+  body.innerHTML = `
+    <div class="parse-title">수동 입력</div>
+    <div class="parse-sub">인바디 수치를 직접 입력해주세요</div>
+    ${[
+      {id:'mi-w', label:'체중',     unit:'kg', val: S.weight||78},
+      {id:'mi-m', label:'골격근량', unit:'kg', val: S.muscle||32},
+      {id:'mi-f', label:'체지방률', unit:'%',  val: S.fatPct||27},
+    ].map(r=>`
+      <div class="manual-row">
+        <span class="manual-row-label">${r.label}</span>
+        <div class="manual-input-wrap">
+          <input id="${r.id}" type="number" class="manual-input" value="${r.val}" step="0.1">
+          <span class="manual-unit">${r.unit}</span>
+        </div>
+      </div>`).join('')}
+    <button class="primary-btn" style="margin-top:12px" onclick="applyManual()">저장</button>
+    <button class="secondary-btn" onclick="closeParse()">취소</button>`;
+}
+
+function applyManual() {
+  applyData({
+    weight: parseFloat(document.getElementById('mi-w').value),
+    muscle: parseFloat(document.getElementById('mi-m').value),
+    fatPct: parseFloat(document.getElementById('mi-f').value),
+    visceralFat: null,
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  설정
+// ═══════════════════════════════════════════════════
+function openSettings() {
+  document.getElementById('cfg-start-fat').value = S.startFatPct;
+  document.getElementById('cfg-goal-fat').value  = S.goalFatPct;
+  document.getElementById('cfg-mounjaro').value  = S.mounjaro;
+  document.getElementById('cfg-pace').value      = S.pace;
+  const dId = S.deviceId || getDeviceId();
+  const dEl = document.getElementById('device-id-display');
+  if (dEl) dEl.textContent = dId;
+  document.getElementById('settings-panel').classList.add('open');
+}
+
+function closeSettings() { document.getElementById('settings-panel').classList.remove('open'); }
+
+function saveSettings() {
+  S.startFatPct = parseFloat(document.getElementById('cfg-start-fat').value) || 30;
+  S.goalFatPct  = parseFloat(document.getElementById('cfg-goal-fat').value)  || 18;
+  S.mounjaro    = parseFloat(document.getElementById('cfg-mounjaro').value)  || 340000;
+  S.pace        = parseFloat(document.getElementById('cfg-pace').value)      || 0.5;
+  saveData();
+  saveUserToSupabase();
+  closeSettings();
+  render();
+}
+
+// ═══════════════════════════════════════════════════
+//  AI 리포트 생성 (측정 직후)
+// ═══════════════════════════════════════════════════
+async function generateReport() {
+  if (!PROXY_URL || S.history.length === 0) return;
+
+  S.reportLoading = true;
+  renderHome();
+
+  const cur  = S.history[0];
+  const prev = S.history[1] || null;
+
+  const curFatKg  = +(cur.weight * cur.fatPct / 100).toFixed(1);
+  const goalFatKg = +(S.weight   * S.goalFatPct / 100).toFixed(1);
+  const remainKg  = Math.max(0, curFatKg - goalFatKg).toFixed(1);
+
+  let context = '';
+  let mode    = 'baseline';
+
+  if (!prev) {
+    context = `
+사용자의 첫 번째 인바디 측정 결과입니다.
+- 체중: ${cur.weight}kg
+- 골격근량: ${cur.muscle}kg
+- 체지방률: ${cur.fatPct}%
+- 체지방량: ${curFatKg}kg
+- 목표 체지방률: ${S.goalFatPct}%
+- 목표까지 남은 체지방: ${remainKg}kg`;
+    mode = 'baseline';
+  } else {
+    const fatDiff    = +(cur.fatPct - prev.fatPct).toFixed(2);
+    const muscleDiff = +(cur.muscle - prev.muscle).toFixed(2);
+    const fatKgDiff  = +(curFatKg - (prev.weight * prev.fatPct / 100)).toFixed(2);
+    mode = fatDiff > 0.1 ? 'warning' : 'good';
+
+    const trendStr = S.history.slice(0, 4).map(h =>
+      `${h.date}: 체지방 ${h.fatPct}% / 골격근 ${h.muscle}kg`
+    ).join('\n');
+
+    context = `
+이전 측정 대비 변화입니다.
+이전: 체중 ${prev.weight}kg | 골격근 ${prev.muscle}kg | 체지방률 ${prev.fatPct}%
+현재: 체중 ${cur.weight}kg  | 골격근 ${cur.muscle}kg  | 체지방률 ${cur.fatPct}%
+변화: 체지방률 ${fatDiff > 0 ? '+' : ''}${fatDiff}% | 골격근 ${muscleDiff > 0 ? '+' : ''}${muscleDiff}kg | 체지방량 ${fatKgDiff > 0 ? '+' : ''}${fatKgDiff}kg
+목표 체지방률: ${S.goalFatPct}% (남은 체지방 ${remainKg}kg / 약 ${Math.ceil(remainKg/S.pace)}주)
+방향: ${mode === 'warning' ? '체지방 증가 또는 정체' : '체지방 감소'}
+
+최근 측정 트렌드:
+${trendStr}`;
+  }
+
+  const toneIndex = S.reports.length % 4;
+  const toneGuide = [
+    '코치 모드: 따뜻하게 칭찬하되 다음 액션을 구체적으로 제시하세요.',
+    '팩폭 모드: 솔직하고 직설적으로, 포장 없이 현실을 말하세요. 냉정하지만 틀리지 않게.',
+    '데이터 모드: 수치와 비율 중심으로, 체지방/근육 비율 변화를 분석적으로 설명하세요.',
+    '미래예측 모드: 지금 추세가 4주·8주 지속되면 몸이 어떻게 달라질지 구체적으로 예측하세요.',
+  ][toneIndex];
+
+  const analogyIndex = S.reports.length % 5;
+  const analogyGuide = [
+    '일상 사물 비유: 아이폰 무게, 물병, 책 무게 등 손에 잡히는 물건으로 체지방량을 표현하세요.',
+    '신체 체감 비유: 관절 부하, 심장 부담, 혈관 상태 등 몸 안의 변화로 표현하세요.',
+    '시간/속도 비유: "이 페이스면 몇 주 후 어떤 옷을 입을 수 있다" 등 시간축으로 표현하세요.',
+    '경제적 비유: 마운자로 몇 회분, 이번 달 식비 등 돈으로 환산해서 표현하세요.',
+    '사회적 비유: 의사가 먼저 알아챌 수준, 주변에서 물어볼 시점 등 사회적 맥락으로 표현하세요.',
+  ][analogyIndex];
+
+  const systemPrompt = `당신은 체성분 분석 코치입니다. 인바디 데이터를 보고 짧고 임팩트 있는 리포트를 작성합니다.
+
+오늘의 톤: ${toneGuide}
+오늘의 비유 방식: ${analogyGuide}
+
+규칙:
+1. 반드시 위의 톤과 비유 방식을 따를 것
+2. 2~4문장, 200자 이내
+3. 트렌드가 있으면 단순 비교가 아닌 흐름을 언급할 것
+4. 좋은 방향: 다음 milestone(수면/테스토스테론/관절 등)까지 얼마나 남았는지 예고
+5. 나쁜 방향: 이 추세 지속 시 n주 후 구체적 결과 경고 (단순 "주의하세요" 금지)
+6. 첫 측정: 현재 체지방 총량을 위의 비유로 표현 + 목표 달성 시 변화 예고
+7. HTML 사용 가능: <span class="highlight">강조</span> 또는 <span class="warn-text">경고문구</span>
+8. 반드시 한국어, 존댓말`;
+
+  try {
+    const res = await fetch(getApiEndpoint(), {
+      method: 'POST',
+      headers: getApiHeaders(),
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: context }]
+      })
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+    const text = data.content?.[0]?.text?.trim() || '';
+    if (!text) return;
+
+    const now  = new Date();
+    const date = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    S.reports.unshift({ date, text, type: mode });
+    if (S.reports.length > 10) S.reports.pop();
+    S.reportLoading = false;
+    renderHome();
+
+    if (S._lastMeasurementId) {
+      updateReportInSupabase(S._lastMeasurementId, text, mode);
+    }
+  } catch(e) {
+    console.warn('리포트 생성 실패:', e);
+    S.reportLoading = false;
+    renderHome();
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  오늘의 데일리 팁 생성 (매일 1회)
+// ═══════════════════════════════════════════════════
+async function generateDailyTip(force = false) {
+  if (!hasData()) return;
+
+  const today    = new Date();
+  const todayStr = `${today.getMonth()+1}/${today.getDate()}`;
+
+  // 오늘 이미 생성했으면 스킵 (force=true면 무조건 재생성)
+  if (!force && S.dailyTip && S.dailyTip.date === todayStr) return;
+
+  // Worker URL 없으면 EFFECTS 배열에서 날짜 기반 선택 (폴백)
+  if (!PROXY_URL) {
+    const idx = (today.getDate() + today.getMonth() * 30) % EFFECTS.length;
+    S.dailyTip = { date: todayStr, ...EFFECTS[idx] };
+    saveData();
+    renderHome();
+    return;
+  }
+
+  S.tipLoading = true;
+  renderHome();
+
+  const curFatKg  = S.weight * S.fatPct / 100;
+  const goalFatKg = S.weight * S.goalFatPct / 100;
+  const remainKg  = Math.max(0, curFatKg - goalFatKg);
+
+  const systemPrompt = `당신은 다이어트 동기부여 코치입니다. 매일 한 가지 건강 효과 팁을 제안합니다.
+
+사용자 현재 상태:
+- 체중: ${S.weight}kg | 골격근량: ${S.muscle}kg | 체지방률: ${S.fatPct}%
+- 목표 체지방률: ${S.goalFatPct}% | 목표까지 남은 체지방: ${remainKg.toFixed(1)}kg
+
+반드시 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
+{
+  "line1": "지금보다 Xkg 더 빠지면",
+  "line2": "주요 효과 제목",
+  "accent": "핵심 수치나 키워드",
+  "bullets": ["효과 설명 1", "효과 설명 2", "효과 설명 3"]
+}
+
+규칙:
+1. line1: 현재 체지방 기준 현실적으로 달성 가능한 감량 목표 (예: "1kg 더 빠지면", "2kg 더 빠지면")
+2. line2: 수면, 관절, 테스토스테론, 혈압, 인지력 등 건강 효과 제목
+3. accent: 구체적인 수치나 강렬한 표현 (green 강조 표시됨)
+4. bullets: 각 40자 이내, 구체적인 신체 변화 3가지
+5. 오늘 날짜 ${todayStr} 기준으로 매일 다른 효과 제안
+6. 반드시 한국어`;
+
+  try {
+    const res = await fetch(getApiEndpoint(), {
+      method: 'POST',
+      headers: getApiHeaders(),
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 400,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: '오늘의 다이어트 효과 팁을 생성해주세요.' }]
+      })
+    });
+
+    if (!res.ok) throw new Error(`API 오류 (${res.status})`);
+    const data = await res.json();
+    const text = data.content?.[0]?.text?.trim() || '';
+    const tip  = JSON.parse(text.replace(/```json|```/g, '').trim());
+    S.dailyTip  = { date: todayStr, ...tip };
+  } catch(e) {
+    console.warn('데일리 팁 생성 실패, 폴백 사용:', e);
+    const idx  = (today.getDate() + today.getMonth() * 30) % EFFECTS.length;
+    S.dailyTip = { date: todayStr, ...EFFECTS[idx] };
+  }
+
+  S.tipLoading = false;
+  saveData();
+  renderHome();
+}
+
+// ═══════════════════════════════════════════════════
+//  토스트 알림
+// ═══════════════════════════════════════════════════
+function showToast(msg, type = '', duration = 2500) {
+  let el = document.getElementById('fatcut-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'fatcut-toast';
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.className = `toast ${type}`;
+  void el.offsetWidth;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function setSyncBadge(cls, text) {
+  const el = document.getElementById('sync-badge');
+  if (el) { el.className = `sync-badge ${cls}`; el.textContent = text; }
+}
+
+// ═══════════════════════════════════════════════════
+//  기기 ID 관리
+// ═══════════════════════════════════════════════════
+function getDeviceId() {
+  let id = localStorage.getItem('fatcut_device_id');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('fatcut_device_id', id);
+  }
+  return id;
+}
+
+function copyDeviceId() {
+  const id = S.deviceId || getDeviceId();
+  navigator.clipboard.writeText(id).then(() => {
+    const el = document.getElementById('device-id-display');
+    const orig = el.textContent;
+    el.textContent = '복사됨!';
+    setTimeout(() => el.textContent = orig, 1500);
+  });
+}
+
+async function changeDeviceId() {
+  const newId = document.getElementById('device-id-input')?.value?.trim();
+  if (!newId || newId.length < 10) {
+    showToast('올바른 기기 ID를 입력해주세요', 'err');
+    return;
+  }
+  const btn = document.getElementById('change-id-btn');
+  if (btn) { btn.textContent = '동기화 중...'; btn.disabled = true; }
+  S.deviceId = newId;
+  localStorage.setItem('fatcut_device_id', newId);
+  S.history = [];
+  S.reports = [];
+  closeSettings();
+  await syncFromSupabase();
+  if (btn) { btn.textContent = '이 ID로 데이터 불러오기'; btn.disabled = false; }
+}
+
+async function forceSyncFromSupabase() {
+  setSyncBadge('', '동기화 중...');
+  await syncFromSupabase();
+  closeSettings();
+}
+
+// ═══════════════════════════════════════════════════
+//  유틸
+// ═══════════════════════════════════════════════════
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  Supabase REST 헬퍼
+// ═══════════════════════════════════════════════════
+async function supaFetch(path, options = {}) {
+  const url = SUPA_URL + '/rest/v1/' + path;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...(options.headers || {}),
+    }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`[${res.status}] ${err.message || err.code || res.statusText}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// ── Supabase 동기화 (불러오기)
+async function syncFromSupabase() {
+  const deviceId = S.deviceId;
+  setSyncBadge('', '동기화 중...');
+  try {
+    let user = null;
+    try {
+      const userList = await supaFetch(
+        `users?device_id=eq.${encodeURIComponent(deviceId)}&limit=1`
+      );
+      user = userList?.[0] || null;
+    } catch(e) {
+      console.warn('사용자 설정 로드 실패:', e.message);
+    }
+
+    if (user) {
+      S.goalFatPct  = user.goal_fat_pct  ?? S.goalFatPct;
+      S.startFatPct = user.start_fat_pct ?? S.startFatPct;
+      S.startWeight = user.start_weight  ?? S.startWeight;
+      S.mounjaro    = user.mounjaro_cost ?? S.mounjaro;
+      S.pace        = user.pace          ?? S.pace;
+    }
+
+    let measurements = null;
+    try {
+      measurements = await supaFetch(
+        `measurements?device_id=eq.${encodeURIComponent(deviceId)}&order=measured_at.desc&limit=50`
+      );
+    } catch(e) {
+      console.warn('측정 기록 로드 실패:', e.message);
+      setSyncBadge('err', `로드 실패`);
+      showToast(`동기화 실패: ${e.message}`, 'err', 4000);
+      render();
+      return;
+    }
+
+    if (measurements && measurements.length > 0) {
+      const latest = measurements[0];
+      S.weight = latest.weight  ?? S.weight;
+      S.muscle = latest.muscle  ?? S.muscle;
+      S.fatPct = latest.fat_pct ?? S.fatPct;
+
+      S.history = measurements.map(m => {
+        const date = new Date(m.measured_at);
+        return {
+          id:         m.id,
+          date:       `${date.getMonth()+1}/${date.getDate()}`,
+          weight:     m.weight,
+          muscle:     m.muscle,
+          fatPct:     m.fat_pct,
+          delta:      0,
+          reportText: m.report_text,
+          reportType: m.report_type,
+        };
+      });
+
+      for (let i = 0; i < S.history.length - 1; i++) {
+        S.history[i].delta = parseFloat(
+          (S.history[i].fatPct - S.history[i+1].fatPct).toFixed(2)
+        );
+      }
+
+      S.reports = measurements
+        .filter(m => m.report_text)
+        .map(m => {
+          const date = new Date(m.measured_at);
+          return {
+            date: `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`,
+            text: m.report_text,
+            type: m.report_type || 'baseline',
+          };
+        });
+
+      saveData();
+      setSyncBadge('ok', `✓ ${measurements.length}개 기록`);
+      showToast(`${measurements.length}개 기록 동기화 완료`, 'ok');
+    } else {
+      setSyncBadge('err', '기록 없음');
+      showToast('이 기기 ID에 저장된 기록이 없어요', 'err', 3500);
+    }
+    render();
+  } catch(e) {
+    console.warn('Supabase 동기화 실패:', e.message || e);
+    setSyncBadge('err', '실패');
+    showToast(`동기화 실패: ${e.message || '네트워크 오류'}`, 'err', 4000);
+    render();
+  }
+}
+
+// ── 사용자 설정 저장
+async function saveUserToSupabase() {
+  const deviceId = S.deviceId || getDeviceId();
+  if (!deviceId) return;
+  try {
+    await supaFetch('users', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        device_id:     deviceId,
+        goal_fat_pct:  S.goalFatPct,
+        start_fat_pct: S.startFatPct,
+        start_weight:  S.startWeight,
+        mounjaro_cost: S.mounjaro,
+        pace:          S.pace,
+      })
+    });
+  } catch(e) {
+    console.error('사용자 설정 저장 실패:', e.message);
+  }
+}
+
+// ── 측정 기록 저장
+async function saveMeasurementToSupabase(data, reportText, reportType) {
+  const deviceId = S.deviceId || getDeviceId();
+  if (!deviceId) { console.error('device_id 없음'); return null; }
+
+  const payload = {
+    device_id:    deviceId,
+    weight:       data.weight      ?? null,
+    muscle:       data.muscle      ?? null,
+    fat_pct:      data.fatPct      ?? null,
+    fat_kg:       (data.weight && data.fatPct) ? +(data.weight * data.fatPct / 100).toFixed(1) : null,
+    visceral_fat: data.visceralFat ?? null,
+    bmr:          data.bmr         ?? null,
+    report_text:  reportText       || null,
+    report_type:  reportType       || null,
+  };
+
+  try {
+    const result = await supaFetch('measurements', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify(payload)
+    });
+    const inserted = Array.isArray(result) ? result[0] : result;
+    return inserted;
+  } catch(e) {
+    console.error('측정 저장 실패:', e.message);
+    return null;
+  }
+}
+
+// ── 리포트 업데이트
+async function updateReportInSupabase(measurementId, reportText, reportType) {
+  if (!measurementId) return;
+  try {
+    await supaFetch(`measurements?id=eq.${measurementId}`, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ report_text: reportText, report_type: reportType })
+    });
+  } catch(e) { console.warn('리포트 업데이트 실패:', e.message); }
+}
+
+// ═══════════════════════════════════════════════════
+//  데이터 영속성 (localStorage)
+// ═══════════════════════════════════════════════════
+function saveData() {
+  const data = {
+    weight:      S.weight,
+    muscle:      S.muscle,
+    fatPct:      S.fatPct,
+    startFatPct: S.startFatPct,
+    startWeight: S.startWeight,
+    goalFatPct:  S.goalFatPct,
+    mounjaro:    S.mounjaro,
+    pace:        S.pace,
+    history:     S.history,
+    reports:     S.reports,
+    dailyTip:    S.dailyTip,
+  };
+  localStorage.setItem('fatcut_data', JSON.stringify(data));
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem('fatcut_data');
+    if (!raw) return;
+    Object.assign(S, JSON.parse(raw));
+  } catch(e) {
+    console.warn('데이터 로드 실패:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  줌 방지 (모바일 웹앱)
+// ═══════════════════════════════════════════════════
+document.addEventListener('touchstart', (e) => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+let _lastTap = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - _lastTap < 300) e.preventDefault();
+  _lastTap = now;
+}, { passive: false });
+
+// ═══════════════════════════════════════════════════
+//  파비콘 생성 (Black Han Sans + 블랙 배경 + 그린)
+// ═══════════════════════════════════════════════════
+async function generateFavicon() {
+  try {
+    await document.fonts.load('400 60px "Black Han Sans"');
+
+    const size = 192;
+    const canvas = document.createElement('canvas');
+    canvas.width  = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // 배경 (검정, 라운드)
+    ctx.fillStyle = '#161616';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, size, size, 36);
+    ctx.fill();
+
+    // 폰트 크기 자동 조절 (FATCUT이 여백 없이 꽉 차도록)
+    let fontSize = 62;
+    ctx.font = `400 ${fontSize}px "Black Han Sans"`;
+    while (ctx.measureText('FATCUT').width > size - 20 && fontSize > 24) {
+      fontSize -= 2;
+      ctx.font = `400 ${fontSize}px "Black Han Sans"`;
+    }
+
+    ctx.fillStyle = '#00FB5C';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('FATCUT', size / 2, size / 2 + 2);
+
+    const link = document.querySelector("link[rel='icon']") || document.createElement('link');
+    link.rel  = 'icon';
+    link.type = 'image/png';
+    link.href = canvas.toDataURL('image/png');
+    if (!link.parentNode) document.head.appendChild(link);
+  } catch(e) {
+    console.warn('파비콘 생성 실패:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  초기화
+// ═══════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  S.deviceId = getDeviceId();
+
+  // 파비콘 생성
+  generateFavicon();
+
+  // 로컬 데이터 먼저 렌더 (빠른 초기 표시)
+  loadData();
+  render();
+
+  // Supabase 최신 데이터 동기화
+  await syncFromSupabase();
+
+  // 오늘의 팁 생성 (오늘 것이 없으면)
+  await generateDailyTip();
+});
+</script>
+</body>
+</html>
